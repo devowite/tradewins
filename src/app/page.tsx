@@ -269,8 +269,17 @@ export default function Home() {
                                 ? 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
                                 : 'bg-transparent text-gray-700 cursor-not-allowed'
                         }`}
-                    >
-                        {league}
+                    <div className="flex items-center gap-3">
+                            {/* LOGO ADDITION */}
+                            {league === 'NHL' && (
+                                <img 
+                                    src="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg" 
+                                    alt="NHL" 
+                                    className="h-6 w-6 object-contain"
+                                />
+                            )}
+                            {league}
+                        </div>
                         {league !== 'NHL' && <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded text-gray-500">SOON</span>}
                     </button>
                 ))}

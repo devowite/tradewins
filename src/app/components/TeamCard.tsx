@@ -25,19 +25,20 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
   const myTotalPayout = myShares * estPayoutPerShare;
   const myTotalValue = myShares * currentPrice;
 
+  // --- LOGO URL BUILDER ---
+  // We use the official NHL CDN. 
+  // Note: 'light' usually looks best on dark mode, but you can swap to 'dark' if needed.
+  const logoUrl = `https://assets.nhle.com/logos/nhl/svg/${team.ticker}_light.svg`;
+
   // --- DATE FORMATTER ---
   const getNextGameText = () => {
     if (!team.next_game_at) return 'TBD';
-    
     const gameDate = new Date(team.next_game_at);
     const today = new Date();
     const isToday = gameDate.getDate() === today.getDate() && gameDate.getMonth() === today.getMonth();
-    
     const timeStr = gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     
     if (isToday) return `Tonight ${timeStr}`;
-    
-    // Otherwise return Day Name (e.g. "Mon 7:00 PM")
     const dayName = gameDate.toLocaleDateString('en-US', { weekday: 'short' });
     return `${dayName} ${timeStr}`;
   };
@@ -53,7 +54,6 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
         .limit(50);
       
       let rawData = data || [];
-
       let chartData = rawData.map((t: any) => ({
         label: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         price: t.share_price
@@ -66,7 +66,6 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
       }
 
       chartData.push({ label: 'Now', price: currentPrice });
-
       setHistory(chartData);
 
       const startPrice = chartData[0].price;
@@ -105,30 +104,44 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
         className={`p-4 cursor-pointer bg-gray-800 hover:bg-gray-800/80 transition ${isExpanded ? 'rounded-t-xl' : 'rounded-xl'}`}
       >
         <div className="flex justify-between items-start mb-3">
-             <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-white text-md truncate pr-2">{team.name}</h3>
-                    {/* RECORD */}
-                    <span className="text-[10px] text-gray-500 font-mono bg-gray-900 px-1.5 py-0.5 rounded">
-                        {team.wins || 0}-{team.losses || 0}-{team.otl || 0}
-                    </span>
-                </div>
+             <div className="flex items-center gap-3">
                 
-                {/* NEXT GAME INDICATOR */}
-                <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
-                    <CalendarClock size={12} />
-                    <span className="font-bold">{team.next_opponent || '--'}</span>
-                    <span className="text-gray-500">•</span>
-                    <span className="text-gray-400">{getNextGameText()}</span>
+                {/* TEAM LOGO */}
+                <div className="h-10 w-10 bg-white/5 rounded-full p-1.5 flex items-center justify-center border border-white/10 shadow-inner">
+                    <img 
+                        src={logoUrl} 
+                        alt={team.ticker} 
+                        className="w-full h-full object-contain drop-shadow-md"
+                        onError={(e) => {
+                            // Fallback if logo fails to load
+                            (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                    />
+                </div>
+
+                <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-white text-md truncate max-w-[120px]">{team.name}</h3>
+                        <span className="text-[10px] text-gray-500 font-mono bg-gray-900 px-1.5 py-0.5 rounded">
+                            {team.wins || 0}-{team.losses || 0}-{team.otl || 0}
+                        </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
+                        <CalendarClock size={12} />
+                        <span className="font-bold">{team.next_opponent || '--'}</span>
+                        <span className="text-gray-500">•</span>
+                        <span className="text-gray-400">{getNextGameText()}</span>
+                    </div>
                 </div>
              </div>
 
-             <div className="text-gray-500 hover:text-white transition shrink-0 pt-1">
+             <div className="text-gray-500 hover:text-white transition shrink-0 pt-2">
                 {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
              </div>
         </div>
 
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2 pl-1">
            <div className="flex flex-col">
               <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Price</span>
               <div className="flex items-center gap-2">
