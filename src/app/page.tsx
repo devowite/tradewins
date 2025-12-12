@@ -360,7 +360,8 @@ export default function Home() {
                                             myShares={holdings[team.id]}
                                             onTrade={setSelectedTeam}
                                             onSimWin={user?.is_admin ? handleSimulateWin : undefined}
-                                        />
+											userId={user?.id}
+										/>
                                     ))}
                                 </div>
                                 <div className="h-px bg-gray-800 w-full my-8"></div>
@@ -380,7 +381,8 @@ export default function Home() {
                                         myShares={0}
                                         onTrade={setSelectedTeam}
                                         onSimWin={user?.is_admin ? handleSimulateWin : undefined}
-                                    />
+										userId={user?.id}
+								   />
                                 ))}
                             </div>
                         </div>

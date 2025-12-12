@@ -10,22 +10,24 @@ interface TeamCardProps {
   myShares: number;
   onTrade: (team: any) => void;
   onSimWin?: (id: number, name: string) => void;
+  userId?: string; // NEW: Needed to fetch personal cost basis
 }
 
-export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCardProps) {
+export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: TeamCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [changePercent, setChangePercent] = useState(0);
+  const [avgCost, setAvgCost] = useState(0); // NEW: State for Average Cost
 
   // --- MATH ---
   const currentPrice = 10.00 + (team.shares_outstanding * 0.01);
-  const estPayoutPerShare = team.shares_outstanding > 0
-    ? (team.dividend_bank * 0.50) / team.shares_outstanding
+  const estPayoutPerShare = team.shares_outstanding > 0 
+    ? (team.dividend_bank * 0.50) / team.shares_outstanding 
     : 0;
   const myTotalPayout = myShares * estPayoutPerShare;
   const myTotalValue = myShares * currentPrice;
 
-  // --- LOGO URL BUILDER ---
+  // --- LOGO URL ---
   const logoUrl = `https://assets.nhle.com/logos/nhl/svg/${team.ticker}_light.svg`;
 
   // --- DATE FORMATTER ---
@@ -35,23 +37,24 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
     const today = new Date();
     const isToday = gameDate.getDate() === today.getDate() && gameDate.getMonth() === today.getMonth();
     const timeStr = gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
+    
     if (isToday) return `Tonight ${timeStr}`;
     const dayName = gameDate.toLocaleDateString('en-US', { weekday: 'short' });
     return `${dayName} ${timeStr}`;
   };
 
-  // --- FETCH HISTORY ---
+  // --- DATA FETCHING (Graph + Cost Basis) ---
   useEffect(() => {
-    const loadHistory = async () => {
-      const { data } = await supabase
+    const loadData = async () => {
+      // 1. Fetch Graph History (Global)
+      const { data: graphData } = await supabase
         .from('transactions')
         .select('created_at, share_price')
         .eq('team_id', team.id)
         .order('created_at', { ascending: true })
         .limit(50);
-
-      let rawData = data || [];
+      
+      let rawData = graphData || [];
       let chartData = rawData.map((t: any) => ({
         label: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         price: t.share_price
@@ -62,67 +65,69 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
       } else {
          chartData.unshift({ label: 'IPO', price: 10.00 });
       }
-
       chartData.push({ label: 'Now', price: currentPrice });
       setHistory(chartData);
 
       const startPrice = chartData[0].price;
       const change = ((currentPrice - startPrice) / startPrice) * 100;
       setChangePercent(change);
+
+      // 2. Fetch Cost Basis (User Specific) - ONLY if owned
+      if (myShares > 0 && userId) {
+        const { data: myBuys } = await supabase
+            .from('transactions')
+            .select('usd_amount, shares_amount')
+            .eq('user_id', userId)
+            .eq('team_id', team.id)
+            .eq('type', 'BUY');
+        
+        if (myBuys && myBuys.length > 0) {
+            let totalSpent = 0;
+            let totalBought = 0;
+            myBuys.forEach((t: any) => {
+                totalSpent += t.usd_amount;
+                totalBought += t.shares_amount;
+            });
+            if (totalBought > 0) {
+                setAvgCost(totalSpent / totalBought);
+            }
+        }
+      }
     };
 
-    loadHistory();
-  }, [team.id, currentPrice, isExpanded]);
+    loadData();
+  }, [team.id, currentPrice, isExpanded, myShares, userId]); 
 
-  // --- VOLATILITY LOGIC ---
-  let volatilityLabel = 'Neutral';
-  let volatilityColor = 'text-yellow-500';
-  let volatilityBg = 'bg-yellow-500/10 border-yellow-500/20';
-
-  if (team.reserve_pool < 2000) {
-    volatilityLabel = 'High Volatility';
-    volatilityColor = 'text-red-400';
-    volatilityBg = 'bg-red-500/10 border-red-500/20';
-  } else if (team.reserve_pool > 8000) {
-    volatilityLabel = 'Stable';
-    volatilityColor = 'text-blue-400';
-    volatilityBg = 'bg-blue-500/10 border-blue-500/20';
-  }
-
+  // --- VISUALS ---
   const isPositive = changePercent >= 0;
-  const graphColor = isPositive ? '#4ade80' : '#f87171';
+  const graphColor = isPositive ? '#4ade80' : '#f87171'; 
+  
+  // Cost Basis Color Logic
+  const isProfit = currentPrice >= avgCost;
 
   return (
-    // CHANGE: Changed overflow-visible to overflow-hidden so the color bar corners are rounded
-    <div
+    <div 
       className={`bg-gray-800 rounded-xl border border-gray-700 transition-all duration-300 shadow-lg overflow-hidden ${isExpanded ? 'ring-2 ring-blue-500/50' : 'hover:border-blue-500'}`}
     >
-      {/* NEW: Team Color Bar at the top */}
-      <div
-        className="h-1.5 w-full"
-        style={{ backgroundColor: team.color || '#374151' }} // Fallback to gray if no color defined
+      {/* Team Color Bar */}
+      <div 
+        className="h-1.5 w-full" 
+        style={{ backgroundColor: team.color || '#374151' }} 
       ></div>
 
       {/* --- HEADER --- */}
-      <div
+      <div 
         onClick={() => setIsExpanded(!isExpanded)}
-        // CHANGE: Removed dynamic rounding since parent container handles it now
         className="p-4 cursor-pointer bg-gray-800 hover:bg-gray-800/80 transition"
       >
         <div className="flex justify-between items-start mb-3">
              <div className="flex items-center gap-3">
-
-                {/* TEAM LOGO */}
-                {/* CHANGE: Increased size to h-12 w-12, reduced padding to p-0.5, added flex-shrink-0 */}
                 <div className="h-12 w-12 bg-white/5 rounded-full p-0.5 flex items-center justify-center border border-white/10 shadow-inner flex-shrink-0">
-                    <img
-                        src={logoUrl}
-                        alt={team.ticker}
+                    <img 
+                        src={logoUrl} 
+                        alt={team.ticker} 
                         className="w-full h-full object-contain drop-shadow-md"
-                        onError={(e) => {
-                            // Fallback if logo fails to load
-                            (e.target as HTMLImageElement).style.display = 'none';
-                        }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                 </div>
 
@@ -133,7 +138,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
                             {team.wins || 0}-{team.losses || 0}-{team.otl || 0}
                         </span>
                     </div>
-
+                    
                     <div className="flex items-center gap-1.5 text-[10px] text-blue-300">
                         <CalendarClock size={12} />
                         <span className="font-bold">{team.next_opponent || '--'}</span>
@@ -155,7 +160,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
                   <span className="font-mono text-white font-bold text-lg">
                     ${currentPrice.toFixed(2)}
                   </span>
-
+                  
                   <div className="relative group cursor-help">
                       <div className={`flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded ${isPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                           {isPositive ? <TrendingUp size={10} className="mr-1"/> : <TrendingDown size={10} className="mr-1"/>}
@@ -178,9 +183,20 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
 
         {myShares > 0 && (
             <div className="mt-3 pt-2 border-t border-gray-700 flex justify-between items-center text-xs">
-                <div className="flex flex-col">
-                    <span className="text-blue-300">Owned: <span className="font-bold text-white">{myShares}</span></span>
-                    <span className="text-[10px] text-gray-500">(Value: ${myTotalValue.toFixed(2)})</span>
+                <div className="flex flex-col gap-0.5">
+                    <div>
+                        <span className="text-blue-300">Owned: <span className="font-bold text-white">{myShares}</span></span>
+                        <span className="text-[10px] text-gray-500 ml-1">(Value: ${myTotalValue.toFixed(2)})</span>
+                    </div>
+                    {/* NEW: Avg Cost Display */}
+                    {avgCost > 0 && (
+                        <div className="text-[10px]">
+                            <span className="text-gray-500">Avg Cost: </span>
+                            <span className={`font-mono font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                                ${avgCost.toFixed(2)}
+                            </span>
+                        </div>
+                    )}
                 </div>
                 <span className="text-green-400 font-bold">Payout per Win: ${myTotalPayout.toFixed(2)}</span>
             </div>
@@ -190,7 +206,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
       {/* --- EXPANDED --- */}
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 animate-in fade-in slide-in-from-top-2 duration-200 bg-gray-800/50 rounded-b-xl">
-
+            
             <div className="h-40 w-full mt-2 mb-4">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={history}>
@@ -200,36 +216,36 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
                                 <stop offset="95%" stopColor={graphColor} stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <Tooltip
+                        <Tooltip 
                             contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '8px', fontSize: '12px' }}
                             itemStyle={{ color: '#fff' }}
                             formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
-                            labelFormatter={(label) => label}
+                            labelFormatter={(label) => label} 
                         />
-                        <XAxis
-                            dataKey="label"
-                            hide={false}
-                            tick={{fontSize: 10, fill: '#6b7280'}}
+                        <XAxis 
+                            dataKey="label" 
+                            hide={false} 
+                            tick={{fontSize: 10, fill: '#6b7280'}} 
                             tickLine={false}
                             axisLine={false}
                             interval="preserveStartEnd"
                         />
-                        <YAxis
-                            domain={['auto', 'auto']}
+                        <YAxis 
+                            domain={['auto', 'auto']} 
                             orientation="right"
-                            tick={{fontSize: 10, fill: '#6b7280'}}
+                            tick={{fontSize: 10, fill: '#6b7280'}} 
                             tickLine={false}
                             axisLine={false}
                             tickFormatter={(value) => `$${value.toFixed(2)}`}
                             padding={{ top: 20, bottom: 20 }}
-                            width={45}
+                            width={45} 
                         />
-                        <Area
-                            type="monotone"
-                            dataKey="price"
-                            stroke={graphColor}
-                            fillOpacity={1}
-                            fill={`url(#gradient-${team.id})`}
+                        <Area 
+                            type="monotone" 
+                            dataKey="price" 
+                            stroke={graphColor} 
+                            fillOpacity={1} 
+                            fill={`url(#gradient-${team.id})`} 
                             strokeWidth={2}
                         />
                     </AreaChart>
@@ -247,7 +263,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
                     <span className="text-gray-400">Dividend Bank</span>
                     <span className="font-mono text-yellow-500">${team.dividend_bank.toFixed(2)}</span>
                 </div>
-
+                
                 <div className="flex justify-between items-center relative z-10">
                     <div className="flex items-center gap-1 group cursor-help relative">
                         <span className="text-gray-400 border-b border-dotted border-gray-600">Liquidity (Reserve)</span>
@@ -258,7 +274,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
                             Lower Reserve = Price swings wildly on small trades.
                         </div>
                     </div>
-
+                    
                     <div className="flex items-center gap-2">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${volatilityBg} ${volatilityColor}`}>
                             {volatilityLabel}
@@ -269,15 +285,15 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin }: TeamCard
             </div>
 
             <div className="flex gap-2">
-                <button
+                <button 
                 onClick={(e) => { e.stopPropagation(); onTrade(team); }}
                 className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-bold transition shadow-md"
                 >
                 Trade
                 </button>
-
+                
                 {onSimWin && (
-                    <button
+                    <button 
                     onClick={(e) => { e.stopPropagation(); onSimWin(team.id, team.name); }}
                     className="px-3 bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white rounded-lg text-xs uppercase font-bold transition"
                     >
