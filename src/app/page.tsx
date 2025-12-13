@@ -284,7 +284,7 @@ export default function Home() {
                             {/* NFL LOGO (New) */}
                             {league === 'NFL' && (
                                 <img 
-                                    src="https://a.espncdn.com/i/teamlogos/nfl/500/nfl.png" 
+                                    src="https://upload.wikimedia.org/wikipedia/en/a/a2/National_Football_League_logo.svg" 
                                     alt="NFL" 
                                     className="h-6 w-6 object-contain" 
                                 />
