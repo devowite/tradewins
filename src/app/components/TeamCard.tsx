@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History, CalendarDays } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface TeamCardProps {
@@ -23,6 +23,11 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
   const [showLast5, setShowLast5] = useState(false);
   const [last5Games, setLast5Games] = useState<any[]>([]);
   const [loadingLast5, setLoadingLast5] = useState(false);
+
+  // --- NEXT 5 STATE ---
+  const [showNext5, setShowNext5] = useState(false);
+  const [next5Games, setNext5Games] = useState<any[]>([]);
+  const [loadingNext5, setLoadingNext5] = useState(false);
 
   // --- MATH ---
   const currentPrice = 10.00 + (team.shares_outstanding * 0.01);
@@ -51,41 +56,40 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
     return `${dayName} ${timeStr}`;
   };
 
-  // --- FETCH LAST 5 (ON HOVER) ---
+  // --- API HELPER ---
+  const getEspnEndpoint = () => {
+      let sport = 'football/nfl';
+      if (team.league === 'NHL') sport = 'hockey/nhl';
+      
+      let searchTicker = team.ticker;
+      if (team.league === 'NFL') {
+          if(searchTicker === 'WSH') searchTicker = 'WAS';
+          if(searchTicker === 'JAX') searchTicker = 'JAC';
+      }
+      return `https://site.api.espn.com/apis/site/v2/sports/${sport}/teams/${searchTicker}/schedule`;
+  };
+
+  // --- FETCH LAST 5 ---
   const handleLast5Hover = async () => {
     setShowLast5(true);
-    if (last5Games.length > 0 || loadingLast5) return; // Cache hit
+    if (last5Games.length > 0 || loadingLast5) return; 
 
     setLoadingLast5(true);
     try {
-        const results = [];
-        
-        // 1. Determine Endpoint (Unified ESPN for both)
-        let sport = 'football/nfl';
-        if (team.league === 'NHL') sport = 'hockey/nhl';
-        
-        // 2. Ticker Mapping
-        let searchTicker = team.ticker;
-        if (team.league === 'NFL') {
-            if(searchTicker === 'WSH') searchTicker = 'WAS';
-            if(searchTicker === 'JAX') searchTicker = 'JAC';
-        }
-        // (Add NHL specific maps here if needed, usually ESPN matches standard tickers)
-
-        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sport}/teams/${searchTicker}/schedule`);
+        const res = await fetch(getEspnEndpoint());
         const data = await res.json();
         const events = data.events || [];
         
-        // 3. Filter & Sort
         const completed = events
             .filter((e: any) => e.competitions[0].status.type.completed)
             .reverse()
             .slice(0, 5);
 
+        const results = [];
         for (const e of completed) {
             const game = e.competitions[0];
-            const myTeam = game.competitors.find((c: any) => c.team.abbreviation === searchTicker || c.team.id === team.id);
-            const oppTeam = game.competitors.find((c: any) => c.team.abbreviation !== searchTicker && c.team.id !== team.id);
+            const myTeam = game.competitors.find((c: any) => c.team.abbreviation === team.ticker || c.team.id === team.id); // Loose match
+            const oppTeam = game.competitors.find((c: any) => c.team.abbreviation !== myTeam?.team?.abbreviation);
             
             if (myTeam && oppTeam) {
                 const isWin = myTeam.winner === true;
@@ -101,6 +105,46 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
         console.error("Error fetching last 5", e);
     }
     setLoadingLast5(false);
+  };
+
+  // --- FETCH NEXT 5 ---
+  const handleNext5Hover = async () => {
+    setShowNext5(true);
+    if (next5Games.length > 0 || loadingNext5) return;
+
+    setLoadingNext5(true);
+    try {
+        const res = await fetch(getEspnEndpoint());
+        const data = await res.json();
+        const events = data.events || [];
+        
+        // Filter for upcoming games (status 'pre')
+        const upcoming = events
+            .filter((e: any) => e.competitions[0].status.type.state === 'pre')
+            .slice(0, 5);
+
+        const results = [];
+        for (const e of upcoming) {
+            const game = e.competitions[0];
+            const myTeamTicker = team.ticker === 'WSH' ? 'WAS' : team.ticker; // Handle local mapping if needed
+            const oppTeam = game.competitors.find((c: any) => c.team.abbreviation !== myTeamTicker && c.team.id !== team.id);
+            
+            if (oppTeam) {
+                // Try to grab record, fallback to date if missing
+                const record = oppTeam.records?.find((r: any) => r.name === 'overall')?.summary || '0-0-0';
+                
+                results.push({ 
+                    opp: oppTeam.team.abbreviation, 
+                    record: record,
+                    date: new Date(game.date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})
+                });
+            }
+        }
+        setNext5Games(results);
+    } catch (e) {
+        console.error("Error fetching next 5", e);
+    }
+    setLoadingNext5(false);
   };
 
   // --- DATA FETCHING (EXISTING) ---
@@ -176,16 +220,14 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
 
   return (
     <div 
-      // FIX 1: Removed 'overflow-hidden' so tooltip can float outside
       className={`bg-gray-800 rounded-xl border border-gray-700 transition-all duration-300 shadow-lg relative ${isExpanded ? 'ring-2 ring-blue-500/50' : 'hover:border-blue-500'}`}
     >
-      {/* FIX 2: Added 'rounded-t-xl' to keep top corners smooth */}
       <div className="h-1.5 w-full rounded-t-xl" style={{ backgroundColor: team.color || '#374151' }}></div>
 
       {/* --- HEADER --- */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="p-4 cursor-pointer bg-gray-800 hover:bg-gray-800/80 transition rounded-b-xl" // Added rounded-b-xl for when closed
+        className="p-4 cursor-pointer bg-gray-800 hover:bg-gray-800/80 transition rounded-b-xl"
       >
         <div className="flex justify-between items-start mb-3">
              <div className="flex items-start gap-3 w-full">
@@ -218,7 +260,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                             <span className="text-gray-400 hidden sm:inline">{getNextGameText()}</span>
                         </div>
 
-                        {/* --- LAST 5 FEATURE --- */}
+                        {/* --- LAST 5 HOVER --- */}
                         <div 
                             className="relative group ml-auto sm:ml-0 z-50"
                             onMouseEnter={handleLast5Hover}
@@ -228,7 +270,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                                 <History size={10} /> Last 5
                             </span>
 
-                            {/* TOOLTIP WINDOW */}
+                            {/* LAST 5 POPUP */}
                             {showLast5 && (
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-36 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
                                     <div className="bg-black/50 px-2 py-1.5 border-b border-gray-700 text-[10px] text-gray-300 font-bold text-center uppercase tracking-wider">
@@ -256,6 +298,44 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                                 </div>
                             )}
                         </div>
+
+                        {/* --- NEXT 5 HOVER (NEW) --- */}
+                        <div 
+                            className="relative group ml-1 z-50"
+                            onMouseEnter={handleNext5Hover}
+                            onMouseLeave={() => setShowNext5(false)}
+                        >
+                            <span className="flex items-center gap-1 text-[9px] font-bold text-blue-400/70 bg-blue-900/10 px-1.5 py-0.5 rounded cursor-help hover:text-blue-300 transition border border-transparent hover:border-blue-900/30">
+                                <CalendarDays size={10} /> Next 5
+                            </span>
+
+                            {/* NEXT 5 POPUP */}
+                            {showNext5 && (
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
+                                    <div className="bg-black/50 px-2 py-1.5 border-b border-gray-700 text-[10px] text-blue-300 font-bold text-center uppercase tracking-wider">
+                                        Upcoming Schedule
+                                    </div>
+                                    <div className="p-1 space-y-0.5">
+                                        {loadingNext5 ? (
+                                            <p className="text-[9px] text-gray-500 text-center py-2 animate-pulse">Loading...</p>
+                                        ) : next5Games.length > 0 ? (
+                                            next5Games.map((g, i) => (
+                                                <div key={i} className="flex justify-between items-center text-[10px] px-2 py-1 rounded hover:bg-gray-800 transition">
+                                                    <span className="text-gray-400 w-8">vs {g.opp}</span>
+                                                    <span className="text-gray-500 font-mono text-[9px] mr-auto pl-2">{g.date}</span>
+                                                    <span className="font-bold text-gray-300 text-right">
+                                                        {g.record}
+                                                    </span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-[9px] text-gray-500 text-center py-2">No upcoming games</p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                     </div>
                 </div>
              </div>
