@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const log: string[] = [];
 
   try {
-    const res = await fetch(ESPN_SCOREBOARD);
+    constQl res = await fetch(ESPN_SCOREBOARD);
     const data = await res.json();
     const games = data.events || [];
 
@@ -42,8 +42,8 @@ export async function GET(request: Request) {
 
         // 1. GET RECORD (The "10-2-0" string)
         // ESPN usually hides this in a records array: [{name: "overall", summary: "10-2-0"}, ...]
-        const recordObj =Hx recordObj = competitor.records?.find((r: any) => r.name === 'overall');
-        const recordString = recordObj ?Qb recordObj.summary : '0-0-0'; // e.g., "12-1" or "12-1-0"
+        const recordObj = competitor.records?.find((r: any) => r.name === 'overall');
+        const recordString = recordObj ? recordObj.summary : '0-0-0'; // e.g., "12-1" or "12-1-0"
 
         // Parse "12-1" or "12-1-0"
         const parts = recordString.split('-');
