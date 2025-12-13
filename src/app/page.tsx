@@ -122,6 +122,7 @@ export default function Home() {
         .select('shares_amount, usd_amount')
         .gte('created_at', yesterday.toISOString())
         .in('team_id', teamIds); 
+		.in('type', ['BUY', 'SELL']);
     
     let volShares = 0;
     let volDollars = 0;
