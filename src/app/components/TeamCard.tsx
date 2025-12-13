@@ -69,7 +69,25 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       return `https://site.api.espn.com/apis/site/v2/sports/${sport}/teams/${searchTicker}/schedule`;
   };
 
-  // --- FETCH LAST 5 (Historical - Uses API Data) ---
+  // --- TICKER TRANSLATOR ---
+  // Converts ESPN's lazy abbreviations (TB) to Official DB Tickers (TBL)
+  const translateTicker = (espnTicker: string, league: string) => {
+      if (league === 'NHL') {
+          if (espnTicker === 'TB') return 'TBL';
+          if (espnTicker === 'SJ') return 'SJS';
+          if (espnTicker === 'NJ') return 'NJD';
+          if (espnTicker === 'LA') return 'LAK'; // Kings
+          if (espnTicker === 'WAS') return 'WSH'; // Capitals
+          if (espnTicker === 'MON') return 'MTL';
+      } else if (league === 'NFL') {
+          if (espnTicker === 'WAS') return 'WSH';
+          if (espnTicker === 'JAC') return 'JAX';
+          if (espnTicker === 'LA') return 'LAR'; // Rams
+      }
+      return espnTicker; // Default: No translation needed
+  };
+
+  // --- FETCH LAST 5 (Historical) ---
   const handleLast5Hover = async () => {
     setShowLast5(true);
     if (last5Games.length > 0 || loadingLast5) return; 
@@ -107,14 +125,13 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
     setLoadingLast5(false);
   };
 
-  // --- FETCH NEXT 5 (HYBRID: API Schedule + DB Records) ---
+  // --- FETCH NEXT 5 (HYBRID: API + DB) ---
   const handleNext5Hover = async () => {
     setShowNext5(true);
     if (next5Games.length > 0 || loadingNext5) return;
 
     setLoadingNext5(true);
     try {
-        // 1. Get Schedule from ESPN
         const res = await fetch(getEspnEndpoint());
         const data = await res.json();
         const events = data.events || [];
@@ -123,32 +140,30 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             .filter((e: any) => e.competitions[0].status.type.state === 'pre')
             .slice(0, 5);
 
-        // 2. Extract Opponent Tickers
+        // Collect opponents to query
         const oppTickers: string[] = [];
         const tempSchedule: any[] = [];
 
         for (const e of upcoming) {
             const game = e.competitions[0];
-            const myTeamTicker = team.ticker === 'WSH' ? 'WAS' : team.ticker;
+            const myTeamTicker = team.ticker === 'WSH' ? 'WAS' : team.ticker; 
             const oppTeam = game.competitors.find((c: any) => c.team.abbreviation !== myTeamTicker && c.team.id !== team.id);
             
             if (oppTeam) {
-                const tk = oppTeam.team.abbreviation;
-                oppTickers.push(tk);
+                const rawTicker = oppTeam.team.abbreviation;
+                const dbTicker = translateTicker(rawTicker, team.league); // Apply Translation
                 
-                // Also handle common ESPN-to-DB mismatches for query
-                if(tk === 'WAS') oppTickers.push('WSH');
-                if(tk === 'JAC') oppTickers.push('JAX');
-                if(tk === 'LA') oppTickers.push('LAR');
-
+                oppTickers.push(dbTicker); // Query using the CORRECT ticker
+                
                 tempSchedule.push({
-                    oppTicker: tk,
+                    displayTicker: rawTicker, // Show user what ESPN sent (usually fine)
+                    queryTicker: dbTicker,    // Use this to find the record
                     date: new Date(game.date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})
                 });
             }
         }
 
-        // 3. Query OUR Database for these opponents
+        // Query Database
         if (oppTickers.length > 0) {
             const { data: dbTeams } = await supabase
                 .from('teams')
@@ -156,18 +171,11 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                 .in('ticker', oppTickers)
                 .eq('league', team.league);
 
-            // 4. Map DB records to Schedule
+            // Map results
             const finalResults = tempSchedule.map((game) => {
-                // Find matching DB record
-                const dbRecord = dbTeams?.find(t => 
-                    t.ticker === game.oppTicker || 
-                    (game.oppTicker === 'WAS' && t.ticker === 'WSH') ||
-                    (game.oppTicker === 'JAC' && t.ticker === 'JAX') ||
-                    (game.oppTicker === 'LA' && t.ticker === 'LAR')
-                );
-
+                const dbRecord = dbTeams?.find(t => t.ticker === game.queryTicker);
                 return {
-                    opp: game.oppTicker,
+                    opp: game.displayTicker,
                     date: game.date,
                     record: dbRecord ? `${dbRecord.wins}-${dbRecord.losses}-${dbRecord.otl}` : '--'
                 };
@@ -335,7 +343,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                             )}
                         </div>
 
-                        {/* --- NEXT 5 HOVER (HYBRID) --- */}
+                        {/* --- NEXT 5 HOVER --- */}
                         <div 
                             className="relative group ml-1 z-50"
                             onMouseEnter={handleNext5Hover}
@@ -380,7 +388,6 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
              </div>
         </div>
 
-        {/* ... (Rest of component same as before) ... */}
         {/* --- PRICE & PAYOUT --- */}
         <div className="flex items-center justify-between mt-3 pl-1">
            <div className="flex flex-col">
