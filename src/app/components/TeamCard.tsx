@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History, CalendarDays } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History, CalendarDays, Radio } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface TeamCardProps {
@@ -29,6 +29,9 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
   const [next5Games, setNext5Games] = useState<any[]>([]);
   const [loadingNext5, setLoadingNext5] = useState(false);
 
+  // --- LIVE GAME STATE ---
+  const [liveGameInfo, setLiveGameInfo] = useState<{score: string, time: string} | null>(null);
+
   // --- MATH ---
   const currentPrice = 10.00 + (team.shares_outstanding * 0.01);
   const estPayoutPerShare = team.shares_outstanding > 0 
@@ -45,13 +48,16 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       logoUrl = `https://assets.nhle.com/logos/nhl/svg/${team.ticker}_light.svg`;
   }
 
+  // --- DATE HELPERS ---
+  const gameDate = team.next_game_at ? new Date(team.next_game_at) : null;
+  const isGameToday = gameDate && 
+      gameDate.getDate() === new Date().getDate() && 
+      gameDate.getMonth() === new Date().getMonth();
+
   const getNextGameText = () => {
-    if (!team.next_game_at) return 'TBD';
-    const gameDate = new Date(team.next_game_at);
-    const today = new Date();
-    const isToday = gameDate.getDate() === today.getDate() && gameDate.getMonth() === today.getMonth();
+    if (!gameDate) return 'TBD';
     const timeStr = gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (isToday) return `Tonight ${timeStr}`;
+    if (isGameToday) return `Tonight ${timeStr}`;
     const dayName = gameDate.toLocaleDateString('en-US', { weekday: 'short' });
     return `${dayName} ${timeStr}`;
   };
@@ -70,24 +76,67 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
   };
 
   // --- TICKER TRANSLATOR ---
-  // Converts ESPN's lazy abbreviations (TB) to Official DB Tickers (TBL)
   const translateTicker = (espnTicker: string, league: string) => {
       if (league === 'NHL') {
           if (espnTicker === 'TB') return 'TBL';
           if (espnTicker === 'SJ') return 'SJS';
           if (espnTicker === 'NJ') return 'NJD';
-          if (espnTicker === 'LA') return 'LAK'; // Kings
-          if (espnTicker === 'WAS') return 'WSH'; // Capitals
+          if (espnTicker === 'LA') return 'LAK'; 
+          if (espnTicker === 'WAS') return 'WSH'; 
           if (espnTicker === 'MON') return 'MTL';
+          if (espnTicker === 'UTA') return 'UTAH';
       } else if (league === 'NFL') {
           if (espnTicker === 'WAS') return 'WSH';
           if (espnTicker === 'JAC') return 'JAX';
-          if (espnTicker === 'LA') return 'LAR'; // Rams
+          if (espnTicker === 'LA') return 'LAR'; 
       }
-      return espnTicker; // Default: No translation needed
+      return espnTicker; 
   };
 
-  // --- FETCH LAST 5 (Historical) ---
+  // --- FETCH LIVE SCORE (Only if game is today) ---
+  useEffect(() => {
+    if (!isGameToday) return; // Don't waste API calls if no game
+
+    const fetchLiveScore = async () => {
+        try {
+            const res = await fetch(getEspnEndpoint());
+            const data = await res.json();
+            const events = data.events || [];
+            
+            // Find the game happening today/now
+            // ESPN Status: 'in' = In Progress
+            const liveGame = events.find((e: any) => e.competitions[0].status.type.state === 'in');
+
+            if (liveGame) {
+                const comp = liveGame.competitions[0];
+                const myTeam = comp.competitors.find((c: any) => 
+                    c.team.abbreviation === team.ticker || 
+                    (team.league === 'NFL' && team.ticker === 'WSH' && c.team.abbreviation === 'WAS') ||
+                    (team.league === 'NFL' && team.ticker === 'JAX' && c.team.abbreviation === 'JAC')
+                );
+                const oppTeam = comp.competitors.find((c: any) => c.id !== myTeam?.id);
+
+                if (myTeam && oppTeam) {
+                    setLiveGameInfo({
+                        score: `${myTeam.team.abbreviation} ${myTeam.score.value}-${oppTeam.score.value} ${oppTeam.team.abbreviation}`,
+                        time: comp.status.type.shortDetail // e.g. "2nd - 14:00"
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Error fetching live score", e);
+        }
+    };
+
+    fetchLiveScore();
+    // Optional: Set an interval to refresh every minute if you want truly live updates
+    // const interval = setInterval(fetchLiveScore, 60000);
+    // return () => clearInterval(interval);
+
+  }, [isGameToday, team.ticker]);
+
+
+  // --- FETCH LAST 5 ---
   const handleLast5Hover = async () => {
     setShowLast5(true);
     if (last5Games.length > 0 || loadingLast5) return; 
@@ -125,7 +174,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
     setLoadingLast5(false);
   };
 
-  // --- FETCH NEXT 5 (HYBRID: API + DB) ---
+  // --- FETCH NEXT 5 ---
   const handleNext5Hover = async () => {
     setShowNext5(true);
     if (next5Games.length > 0 || loadingNext5) return;
@@ -140,7 +189,6 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             .filter((e: any) => e.competitions[0].status.type.state === 'pre')
             .slice(0, 5);
 
-        // Collect opponents to query
         const oppTickers: string[] = [];
         const tempSchedule: any[] = [];
 
@@ -151,19 +199,16 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             
             if (oppTeam) {
                 const rawTicker = oppTeam.team.abbreviation;
-                const dbTicker = translateTicker(rawTicker, team.league); // Apply Translation
-                
-                oppTickers.push(dbTicker); // Query using the CORRECT ticker
-                
+                const dbTicker = translateTicker(rawTicker, team.league); 
+                oppTickers.push(dbTicker); 
                 tempSchedule.push({
-                    displayTicker: rawTicker, // Show user what ESPN sent (usually fine)
-                    queryTicker: dbTicker,    // Use this to find the record
+                    displayTicker: rawTicker, 
+                    queryTicker: dbTicker,    
                     date: new Date(game.date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})
                 });
             }
         }
 
-        // Query Database
         if (oppTickers.length > 0) {
             const { data: dbTeams } = await supabase
                 .from('teams')
@@ -171,7 +216,6 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                 .in('ticker', oppTickers)
                 .eq('league', team.league);
 
-            // Map results
             const finalResults = tempSchedule.map((game) => {
                 const dbRecord = dbTeams?.find(t => t.ticker === game.queryTicker);
                 return {
@@ -180,7 +224,6 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                     record: dbRecord ? `${dbRecord.wins}-${dbRecord.losses}-${dbRecord.otl}` : '--'
                 };
             });
-            
             setNext5Games(finalResults);
         } else {
             setNext5Games([]);
@@ -192,7 +235,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
     setLoadingNext5(false);
   };
 
-  // --- DATA FETCHING (Graph) ---
+  // --- GRAPH DATA ---
   useEffect(() => {
     const loadData = async () => {
       const { data: graphData } = await supabase
@@ -299,11 +342,25 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                         
                         <span className="text-gray-700 text-[10px] hidden sm:inline">•</span>
 
-                        <div className="flex items-center gap-1.5 text-[10px] text-blue-300 whitespace-nowrap">
-                            <CalendarClock size={12} />
-                            <span className="font-bold">{team.next_opponent || '--'}</span>
-                            <span className="text-gray-400 hidden sm:inline">{getNextGameText()}</span>
-                        </div>
+                        {/* --- NEXT GAME / LIVE SCORE AREA --- */}
+                        {liveGameInfo ? (
+                            // LIVE SCORE VIEW
+                            <div className="flex items-center gap-1.5 text-[10px] whitespace-nowrap">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                </span>
+                                <span className="font-bold text-red-400 animate-pulse">{liveGameInfo.score}</span>
+                                <span className="text-red-300/70 font-mono hidden sm:inline">{liveGameInfo.time}</span>
+                            </div>
+                        ) : (
+                            // STANDARD NEXT GAME VIEW
+                            <div className="flex items-center gap-1.5 text-[10px] text-blue-300 whitespace-nowrap">
+                                <CalendarClock size={12} />
+                                <span className="font-bold">{team.next_opponent || '--'}</span>
+                                <span className="text-gray-400 hidden sm:inline">{getNextGameText()}</span>
+                            </div>
+                        )}
 
                         {/* --- LAST 5 HOVER --- */}
                         <div 
