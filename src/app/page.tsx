@@ -64,7 +64,6 @@ export default function Home() {
       const { data: teamData } = await supabase.from('teams').select('*').order('name');
       if (teamData) {
         setTeams(teamData);
-        // Note: We'll calculate stats based on the selected league later
       }
 
       const { data: holdingsData } = await supabase
@@ -122,7 +121,7 @@ export default function Home() {
         .from('transactions')
         .select('shares_amount, usd_amount')
         .gte('created_at', yesterday.toISOString())
-        .in('team_id', teamIds); // <--- THIS FILTER FIXES THE ISSUE
+        .in('team_id', teamIds); 
     
     let volShares = 0;
     let volDollars = 0;
@@ -142,6 +141,7 @@ export default function Home() {
         volume24hDollars: volDollars
     });
   };
+  
   // Recalculate stats whenever the league changes
   useEffect(() => {
     if (teams.length > 0) {
@@ -164,30 +164,10 @@ export default function Home() {
     const { data: teamData } = await supabase.from('teams').select('*').order('name');
     if (teamData) {
         setTeams(teamData);
-        // Stats update triggered by useEffect above
     }
   };
 
-  // --- ACTIONS ---
-  const handleTrade = async (amount: number, mode: 'BUY' | 'SELL') => {
-    if (!selectedTeam || !user) return;
-    const rpcFunction = mode === 'BUY' ? 'buy_stock' : 'sell_stock';
-    
-    const { data, error } = await supabase.rpc(rpcFunction, { 
-        p_user_id: user.id, 
-        p_team_id: selectedTeam.id, 
-        p_amount: amount 
-    });
-
-    if (error || (data && !data.success)) {
-      alert('Error: ' + (error?.message || data?.message));
-    } else {
-      alert(`Success! ${mode === 'BUY' ? 'Bought' : 'Sold'} ${amount} shares.`);
-      setSelectedTeam(null);
-      reloadData(); 
-    }
-  };
-
+  // --- ADMIN SIMULATION ---
   const handleSimulateWin = async (teamId: number, teamName: string) => {
     if (!user?.is_admin) return;
     if (!confirm(`ADMIN: Simulate a WIN for ${teamName}?`)) return;
@@ -204,7 +184,6 @@ export default function Home() {
   };
 
   // --- SORTING & FILTERING ---
-  // 1. First, filter by the active League
   const currentLeagueTeams = teams.filter(t => t.league === selectedLeague);
 
   const getSortedTeams = (teamList: any[]) => {
@@ -227,7 +206,7 @@ export default function Home() {
   const sortedOwned = getSortedTeams(allOwned);
   const sortedUnowned = getSortedTeams(allUnowned);
 
-  const activeLeagues = ['NHL', 'NFL']; // Leagues that are live
+  const activeLeagues = ['NHL', 'NFL'];
 
   return (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
@@ -294,8 +273,7 @@ export default function Home() {
                                     className="h-6 w-6 object-contain" 
                                 />
                             )}
-                            
-                            {/* NFL LOGO (New) */}
+                            {/* NFL LOGO */}
                             {league === 'NFL' && (
                                 <img 
                                     src="https://upload.wikimedia.org/wikipedia/en/a/a2/National_Football_League_logo.svg" 
@@ -369,7 +347,7 @@ export default function Home() {
                     onReload={reloadData}
                 />
             ) : activeTab === 'MARKETS' ? (
-                // VIEW 3: MARKETS (Dynamic for NHL or NFL)
+                // VIEW 3: MARKETS
                 loading ? <p>Loading Data...</p> : (
                     <div className="space-y-6">
                         <MarketStats 
@@ -428,10 +406,10 @@ export default function Home() {
       {selectedTeam && (
         <TradeModal 
             team={selectedTeam} 
-            userBalance={user.usd_balance} 
-            userShares={holdings[selectedTeam.id] || 0}
+            isOpen={true} // New prop
+            userId={user?.id} // New prop for security fetch
             onClose={() => setSelectedTeam(null)} 
-            onConfirm={handleTrade}
+            onSuccess={reloadData} // Refresh parent data after trade
         />
       )}
 
