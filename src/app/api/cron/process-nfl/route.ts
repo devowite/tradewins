@@ -1,82 +1,73 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
-// FIX 1: UPDATED URL (Added /site/)
 const ESPN_NFL_STANDINGS = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/standings';
-const ESPN_NFL_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
-
-const TICKER_MAP: Record<string, string> = {
-    'WSH': 'WAS', 'WAS': 'WSH',
-    'JAC': 'JAX', 'JAX': 'JAC',
-    'LA': 'LAR',  'LAR': 'LA'
-};
 
 export const dynamic = 'force-dynamic'; 
 
 export async function GET(request: Request) {
-  // Use Admin Client (Bypasses RLS)
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
   const log: string[] = [];
-
+  
   try {
-    // --- 1. FETCH STANDINGS ---
     const res = await fetch(ESPN_NFL_STANDINGS);
-    if (!res.ok) throw new Error(`ESPN API Failed: ${res.status}`);
-    
     const data = await res.json();
-    const conferences = data.children || [];
     
-    // --- DEBUG: INSPECT FIRST TEAM ---
-    // This puts the exact JSON structure into your Vercel Logs so we can verify keys
-    try {
-        const firstStat = conferences[0]?.children[0]?.standings?.entries[0]?.stats[0];
-        console.log("DEBUG: First Stat Object looks like:", JSON.stringify(firstStat));
-        log.push(`DEBUG: Sample Stat Key: ${firstStat?.name || firstStat?.type || 'UNKNOWN'}`);
-    } catch (e) {}
+    // X-RAY DIAGNOSTICS
+    // We walk down the tree and log what keys exist at each step.
+    
+    // 1. Root Level
+    log.push(`Root Keys: ${Object.keys(data).join(', ')}`);
+    
+    const conferences = data.children || [];
+    if (conferences.length === 0) {
+        log.push("CRITICAL: 'children' array (conferences) is empty.");
+        return NextResponse.json({ success: false, logs: log });
+    }
 
-    // --- 2. LOOP THROUGH TEAMS ---
-    for (const conf of conferences) {
-        for (const div of conf.children || []) {
-            for (const teamEntry of div.standings.entries || []) {
-                let ticker = teamEntry.team.abbreviation;
-                if (TICKER_MAP[ticker]) ticker = TICKER_MAP[ticker];
+    // 2. Conference Level (e.g., AFC)
+    const firstConf = conferences[0];
+    log.push(`Conf[0] Name: ${firstConf.name}`);
+    log.push(`Conf[0] Keys: ${Object.keys(firstConf).join(', ')}`);
 
-                const stats = teamEntry.stats || [];
+    const divisions = firstConf.children || [];
+    if (divisions.length === 0) {
+        log.push("CRITICAL: 'children' array (divisions) is empty.");
+        return NextResponse.json({ success: false, logs: log });
+    }
 
-                // FIX 2: ROBUST PARSING (Check 'name' AND 'type')
-                // specific stat objects often look like { name: "wins", value: 10 }
-                const getStat = (key: string) => {
-                    const found = stats.find((s: any) => 
-                        (s.name === key) || (s.type === key) || (s.shortDisplayName === key)
-                    );
-                    return found ? found.value : 0;
-                };
-
-                const wins = getStat('wins');
-                const losses = getStat('losses');
-                const ties = getStat('ties');
-
-                // Update DB
-                const { error } = await supabaseAdmin
-                    .from('teams')
-                    .update({ wins, losses, otl: ties })
-                    .eq('ticker', ticker)
-                    .eq('league', 'NFL');
-
-                if (error) log.push(`Error ${ticker}: ${error.message}`);
+    // 3. Division Level (e.g., AFC East)
+    const firstDiv = divisions[0];
+    log.push(`Div[0] Name: ${firstDiv.name}`);
+    log.push(`Div[0] Keys: ${Object.keys(firstDiv).join(', ')}`);
+    
+    // CHECKPOINT: Does 'standings' exist here?
+    if (!firstDiv.standings) {
+        log.push("CRITICAL: 'standings' object is MISSING on Division object.");
+        // Sometimes it's directly in 'children' for simpler structures?
+    } else {
+        const entries = firstDiv.standings.entries || [];
+        log.push(`Entries Count: ${entries.length}`);
+        
+        if (entries.length > 0) {
+            // 4. Team Entry Level
+            const firstTeam = entries[0];
+            log.push(`Team[0] Keys: ${Object.keys(firstTeam).join(', ')}`);
+            
+            // CHECKPOINT: Does 'stats' exist?
+            if (firstTeam.stats) {
+                log.push(`Stats Array Length: ${firstTeam.stats.length}`);
+                if (firstTeam.stats.length > 0) {
+                    log.push(`Stat[0] Keys: ${Object.keys(firstTeam.stats[0]).join(', ')}`);
+                    log.push(`Stat[0] Sample: ${JSON.stringify(firstTeam.stats[0])}`);
+                }
+            } else {
+                log.push("CRITICAL: 'stats' array is MISSING on Team Entry.");
             }
         }
     }
-    
-    log.push('Records Updated Successfully.');
+
     return NextResponse.json({ success: true, logs: log });
 
   } catch (error: any) {
-    console.error("CRON ERROR:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
