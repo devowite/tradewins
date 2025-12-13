@@ -69,7 +69,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       return `https://site.api.espn.com/apis/site/v2/sports/${sport}/teams/${searchTicker}/schedule`;
   };
 
-  // --- FETCH LAST 5 ---
+  // --- FETCH LAST 5 (Historical - Uses API Data) ---
   const handleLast5Hover = async () => {
     setShowLast5(true);
     if (last5Games.length > 0 || loadingLast5) return; 
@@ -88,7 +88,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
         const results = [];
         for (const e of completed) {
             const game = e.competitions[0];
-            const myTeam = game.competitors.find((c: any) => c.team.abbreviation === team.ticker || c.team.id === team.id); // Loose match
+            const myTeam = game.competitors.find((c: any) => c.team.abbreviation === team.ticker || c.team.id === team.id);
             const oppTeam = game.competitors.find((c: any) => c.team.abbreviation !== myTeam?.team?.abbreviation);
             
             if (myTeam && oppTeam) {
@@ -107,47 +107,84 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
     setLoadingLast5(false);
   };
 
-  // --- FETCH NEXT 5 ---
+  // --- FETCH NEXT 5 (HYBRID: API Schedule + DB Records) ---
   const handleNext5Hover = async () => {
     setShowNext5(true);
     if (next5Games.length > 0 || loadingNext5) return;
 
     setLoadingNext5(true);
     try {
+        // 1. Get Schedule from ESPN
         const res = await fetch(getEspnEndpoint());
         const data = await res.json();
         const events = data.events || [];
         
-        // Filter for upcoming games (status 'pre')
         const upcoming = events
             .filter((e: any) => e.competitions[0].status.type.state === 'pre')
             .slice(0, 5);
 
-        const results = [];
+        // 2. Extract Opponent Tickers
+        const oppTickers: string[] = [];
+        const tempSchedule: any[] = [];
+
         for (const e of upcoming) {
             const game = e.competitions[0];
-            const myTeamTicker = team.ticker === 'WSH' ? 'WAS' : team.ticker; // Handle local mapping if needed
+            const myTeamTicker = team.ticker === 'WSH' ? 'WAS' : team.ticker;
             const oppTeam = game.competitors.find((c: any) => c.team.abbreviation !== myTeamTicker && c.team.id !== team.id);
             
             if (oppTeam) {
-                // Try to grab record, fallback to date if missing
-                const record = oppTeam.records?.find((r: any) => r.name === 'overall')?.summary || '0-0-0';
+                const tk = oppTeam.team.abbreviation;
+                oppTickers.push(tk);
                 
-                results.push({ 
-                    opp: oppTeam.team.abbreviation, 
-                    record: record,
+                // Also handle common ESPN-to-DB mismatches for query
+                if(tk === 'WAS') oppTickers.push('WSH');
+                if(tk === 'JAC') oppTickers.push('JAX');
+                if(tk === 'LA') oppTickers.push('LAR');
+
+                tempSchedule.push({
+                    oppTicker: tk,
                     date: new Date(game.date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})
                 });
             }
         }
-        setNext5Games(results);
+
+        // 3. Query OUR Database for these opponents
+        if (oppTickers.length > 0) {
+            const { data: dbTeams } = await supabase
+                .from('teams')
+                .select('ticker, wins, losses, otl')
+                .in('ticker', oppTickers)
+                .eq('league', team.league);
+
+            // 4. Map DB records to Schedule
+            const finalResults = tempSchedule.map((game) => {
+                // Find matching DB record
+                const dbRecord = dbTeams?.find(t => 
+                    t.ticker === game.oppTicker || 
+                    (game.oppTicker === 'WAS' && t.ticker === 'WSH') ||
+                    (game.oppTicker === 'JAC' && t.ticker === 'JAX') ||
+                    (game.oppTicker === 'LA' && t.ticker === 'LAR')
+                );
+
+                return {
+                    opp: game.oppTicker,
+                    date: game.date,
+                    record: dbRecord ? `${dbRecord.wins}-${dbRecord.losses}-${dbRecord.otl}` : '--'
+                };
+            });
+            
+            setNext5Games(finalResults);
+        } else {
+            setNext5Games([]);
+        }
+
     } catch (e) {
         console.error("Error fetching next 5", e);
     }
     setLoadingNext5(false);
   };
 
-  // --- DATA FETCHING (EXISTING) ---
+  // --- DATA FETCHING (Graph) ---
   useEffect(() => {
     const loadData = async () => {
       const { data: graphData } = await supabase
@@ -270,9 +307,8 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                                 <History size={10} /> Last 5
                             </span>
 
-                            {/* LAST 5 POPUP */}
                             {showLast5 && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-36 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
                                     <div className="bg-black/50 px-2 py-1.5 border-b border-gray-700 text-[10px] text-gray-300 font-bold text-center uppercase tracking-wider">
                                         Recent Form
                                     </div>
@@ -281,9 +317,9 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                                             <p className="text-[9px] text-gray-500 text-center py-2 animate-pulse">Loading...</p>
                                         ) : last5Games.length > 0 ? (
                                             last5Games.map((g, i) => (
-                                                <div key={i} className="flex justify-between items-center text-[10px] px-2 py-1 rounded hover:bg-gray-800 transition">
-                                                    <span className="text-gray-400 w-10">vs {g.opp}</span>
-                                                    <span className="text-gray-500 font-mono text-[9px]">{g.score}</span>
+                                                <div key={i} className="flex items-center text-[10px] px-2 py-1 rounded hover:bg-gray-800 transition">
+                                                    <span className="text-gray-400 w-12 font-bold whitespace-nowrap">vs {g.opp}</span>
+                                                    <span className="text-gray-500 font-mono text-[9px] flex-1 text-center">{g.score}</span>
                                                     <span className={`font-bold w-4 text-right ${
                                                         g.result === 'W' ? 'text-green-400' : 'text-red-400'
                                                     }`}>
@@ -299,7 +335,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                             )}
                         </div>
 
-                        {/* --- NEXT 5 HOVER (NEW) --- */}
+                        {/* --- NEXT 5 HOVER (HYBRID) --- */}
                         <div 
                             className="relative group ml-1 z-50"
                             onMouseEnter={handleNext5Hover}
@@ -309,9 +345,8 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                                 <CalendarDays size={10} /> Next 5
                             </span>
 
-                            {/* NEXT 5 POPUP */}
                             {showNext5 && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
                                     <div className="bg-black/50 px-2 py-1.5 border-b border-gray-700 text-[10px] text-blue-300 font-bold text-center uppercase tracking-wider">
                                         Upcoming Schedule
                                     </div>
@@ -320,10 +355,10 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                                             <p className="text-[9px] text-gray-500 text-center py-2 animate-pulse">Loading...</p>
                                         ) : next5Games.length > 0 ? (
                                             next5Games.map((g, i) => (
-                                                <div key={i} className="flex justify-between items-center text-[10px] px-2 py-1 rounded hover:bg-gray-800 transition">
-                                                    <span className="text-gray-400 w-8">vs {g.opp}</span>
-                                                    <span className="text-gray-500 font-mono text-[9px] mr-auto pl-2">{g.date}</span>
-                                                    <span className="font-bold text-gray-300 text-right">
+                                                <div key={i} className="flex items-center text-[10px] px-2 py-1 rounded hover:bg-gray-800 transition">
+                                                    <span className="text-gray-400 w-12 font-bold whitespace-nowrap">vs {g.opp}</span>
+                                                    <span className="text-gray-500 font-mono text-[9px] flex-1 text-center">{g.date}</span>
+                                                    <span className="font-bold text-gray-300 w-12 text-right whitespace-nowrap">
                                                         {g.record}
                                                     </span>
                                                 </div>
@@ -345,6 +380,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
              </div>
         </div>
 
+        {/* ... (Rest of component same as before) ... */}
         {/* --- PRICE & PAYOUT --- */}
         <div className="flex items-center justify-between mt-3 pl-1">
            <div className="flex flex-col">
