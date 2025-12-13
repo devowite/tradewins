@@ -28,8 +28,17 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
   const myTotalValue = myShares * currentPrice;
 
   // --- LOGO URL ---
-  const logoUrl = `https://assets.nhle.com/logos/nhl/svg/${team.ticker}_light.svg`;
-
+  // --- LOGO URL BUILDER ---
+  let logoUrl = '';
+  
+  // Check the league column we just added to the DB
+  if (team.league === 'NFL') {
+      // ESPN CDN for NFL (PNG format)
+      logoUrl = `https://a.espncdn.com/i/teamlogos/nfl/500/${team.ticker}.png`;
+  } else {
+      // NHL CDN (SVG format)
+      logoUrl = `https://assets.nhle.com/logos/nhl/svg/${team.ticker}_light.svg`;
+  }
   // --- DATE FORMATTER ---
   const getNextGameText = () => {
     if (!team.next_game_at) return 'TBD';
