@@ -406,10 +406,12 @@ export default function Home() {
       {selectedTeam && (
         <TradeModal 
             team={selectedTeam} 
-            isOpen={true} // New prop
-            userId={user?.id} // New prop for security fetch
+            isOpen={true} 
+            userId={user?.id}
+            userBalance={user?.usd_balance || 0} // Fix: Pass balance directly
+            userShares={holdings[selectedTeam.id] || 0} // Fix: Pass shares directly
             onClose={() => setSelectedTeam(null)} 
-            onSuccess={reloadData} // Refresh parent data after trade
+            onSuccess={reloadData} 
         />
       )}
 
