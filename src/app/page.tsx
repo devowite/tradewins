@@ -8,8 +8,8 @@ import TeamCard from './components/TeamCard';
 import TradeModal from './components/TradeModal';
 import MarketStats from './components/MarketStats';
 import Portfolio from './components/Portfolio';
-import Profile from './components/Profile';     // NEW
-import WalletModal from './components/WalletModal'; // NEW
+import Profile from './components/Profile';
+import WalletModal from './components/WalletModal';
 
 export default function Home() {
   const router = useRouter();
@@ -20,7 +20,7 @@ export default function Home() {
   const [holdings, setHoldings] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
-  const [isWalletOpen, setIsWalletOpen] = useState(false); // NEW: Wallet State
+  const [isWalletOpen, setIsWalletOpen] = useState(false);
 
   // Market Stats State
   const [marketStats, setMarketStats] = useState({
@@ -60,10 +60,11 @@ export default function Home() {
       
       if (profile) setUser(profile);
 
+      // Fetch ALL teams (NHL + NFL)
       const { data: teamData } = await supabase.from('teams').select('*').order('name');
       if (teamData) {
         setTeams(teamData);
-        calculateMarketStats(teamData);
+        // Note: We'll calculate stats based on the selected league later
       }
 
       const { data: holdingsData } = await supabase
@@ -84,12 +85,13 @@ export default function Home() {
   }, [router]);
 
   // --- STATS CALCULATION HELPER ---
-  const calculateMarketStats = async (currentTeams: any[]) => {
+  // Updated to accept a filtered list of teams so stats reflect the current league
+  const calculateMarketStats = async (leagueTeams: any[]) => {
     let totalCap = 0;
     let totalBank = 0;
     let totalSupply = 0;
 
-    currentTeams.forEach(t => {
+    leagueTeams.forEach(t => {
       const price = 10.00 + (t.shares_outstanding * 0.01);
       totalCap += price * t.shares_outstanding;
       totalBank += t.dividend_bank;
@@ -98,7 +100,7 @@ export default function Home() {
 
     const avgYield = totalSupply > 0 ? (totalBank * 0.50) / totalSupply : 0;
 
-    // Fetch 24h Volume
+    // Fetch 24h Volume (This is still global for now, which is fine for MVP)
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     
@@ -126,6 +128,14 @@ export default function Home() {
     });
   };
 
+  // Recalculate stats whenever the league changes
+  useEffect(() => {
+    if (teams.length > 0) {
+        const leagueTeams = teams.filter(t => t.league === selectedLeague);
+        calculateMarketStats(leagueTeams);
+    }
+  }, [selectedLeague, teams]);
+
   // RELOAD DATA HELPER
   const reloadData = async () => {
     if (!user) return;
@@ -140,7 +150,7 @@ export default function Home() {
     const { data: teamData } = await supabase.from('teams').select('*').order('name');
     if (teamData) {
         setTeams(teamData);
-        calculateMarketStats(teamData);
+        // Stats update triggered by useEffect above
     }
   };
 
@@ -179,7 +189,10 @@ export default function Home() {
     router.push('/login');
   };
 
-  // --- SORTING ---
+  // --- SORTING & FILTERING ---
+  // 1. First, filter by the active League
+  const currentLeagueTeams = teams.filter(t => t.league === selectedLeague);
+
   const getSortedTeams = (teamList: any[]) => {
     return [...teamList].sort((a, b) => {
         if (sortBy === 'NAME') return a.name.localeCompare(b.name);
@@ -195,10 +208,12 @@ export default function Home() {
     });
   };
 
-  const allOwned = teams.filter(t => (holdings[t.id] || 0) > 0);
-  const allUnowned = teams.filter(t => (holdings[t.id] || 0) === 0);
+  const allOwned = currentLeagueTeams.filter(t => (holdings[t.id] || 0) > 0);
+  const allUnowned = currentLeagueTeams.filter(t => (holdings[t.id] || 0) === 0);
   const sortedOwned = getSortedTeams(allOwned);
   const sortedUnowned = getSortedTeams(allUnowned);
+
+  const activeLeagues = ['NHL', 'NFL']; // Leagues that are live
 
   return (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
@@ -243,24 +258,25 @@ export default function Home() {
                 <p className="text-sm text-gray-500">Select a league</p>
             </div>
             <div className="p-4 space-y-2">
-                {['NHL', 'NBA', 'NFL', 'MLB'].map((league) => (
+                {['NHL', 'NFL', 'NBA', 'MLB'].map((league) => (
                     <button
                         key={league}
                         onClick={() => setSelectedLeague(league as any)}
-                        disabled={league !== 'NHL'}
+                        disabled={!activeLeagues.includes(league)}
                         className={`w-full text-left px-4 py-3 rounded-lg font-bold flex justify-between items-center transition ${
                             selectedLeague === league 
                             ? 'bg-blue-600 text-white shadow-md' 
-                            : league === 'NHL' 
+                            : activeLeagues.includes(league)
                                 ? 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
                                 : 'bg-transparent text-gray-700 cursor-not-allowed'
                         }`}
                     >
                         <div className="flex items-center gap-3">
                             {league === 'NHL' && (<img src="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg" alt="NHL" className="h-6 w-6 object-contain" />)}
+                            {league === 'NFL' && (<img src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/nfl.png" alt="NFL" className="h-6 w-6 object-contain" />)}
                             {league}
                         </div>
-                        {league !== 'NHL' && <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded text-gray-500">SOON</span>}
+                        {!activeLeagues.includes(league) && <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded text-gray-500">SOON</span>}
                     </button>
                 ))}
             </div>
@@ -296,7 +312,7 @@ export default function Home() {
                 )}
             </div>
             
-            {/* CLICKABLE BALANCE (OPENS WALLET) */}
+            {/* CLICKABLE BALANCE */}
             <div 
                 onClick={() => setIsWalletOpen(true)}
                 className="flex items-center gap-3 bg-gray-800 px-4 py-2 rounded-full border border-gray-700 cursor-pointer hover:bg-gray-700 transition"
@@ -322,8 +338,8 @@ export default function Home() {
                     onOpenWallet={() => setIsWalletOpen(true)}
                     onReload={reloadData}
                 />
-            ) : activeTab === 'MARKETS' && selectedLeague === 'NHL' ? (
-                // VIEW 3: MARKETS (NHL)
+            ) : activeTab === 'MARKETS' ? (
+                // VIEW 3: MARKETS (Dynamic for NHL or NFL)
                 loading ? <p>Loading Data...</p> : (
                     <div className="space-y-6">
                         <MarketStats 
@@ -389,7 +405,6 @@ export default function Home() {
         />
       )}
 
-      {/* WALLET MODAL */}
       {isWalletOpen && user && (
         <WalletModal 
             balance={user.usd_balance}
