@@ -28,7 +28,13 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
   const [next5Games, setNext5Games] = useState<any[]>([]);
   const [loadingNext5, setLoadingNext5] = useState(false);
 
-  const [liveGameInfo, setLiveGameInfo] = useState<{score: string, time: string} | null>(null);
+  // --- GAME STATUS STATE (Live or Final) ---
+  const [todaysGameInfo, setTodaysGameInfo] = useState<{
+      status: 'live' | 'final';
+      score: string;
+      time: string;
+      resultColor?: string; // For Final (Green/Red)
+  } | null>(null);
 
   // --- MATH ---
   const currentPrice = 10.00 + (team.shares_outstanding * 0.01);
@@ -78,13 +84,12 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       return espnTicker; 
   };
 
-  // --- FETCH LIVE SCORE (Use Scoreboard API for Real-Time) ---
+  // --- FETCH LIVE/FINAL SCORE (Scoreboard API) ---
   useEffect(() => {
     if (!isGameToday) return; 
 
-    const fetchLiveScore = async () => {
+    const fetchGameStatus = async () => {
         try {
-            // FIX: Use global Scoreboard endpoint instead of Team Schedule
             let sport = 'football/nfl';
             if (team.league === 'NHL') sport = 'hockey/nhl';
             const scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/scoreboard`;
@@ -93,19 +98,18 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             const data = await res.json();
             const events = data.events || [];
             
-            // Find game where this team is playing AND it's live ('in')
-            const liveGame = events.find((e: any) => {
-                const isLive = e.status.type.state === 'in';
-                const hasTeam = e.competitions[0].competitors.some((c: any) => {
+            // Find game where this team is playing
+            const myGame = events.find((e: any) => {
+                return e.competitions[0].competitors.some((c: any) => {
                     const t = c.team.abbreviation;
-                    // Match against standard ticker OR translated ones
                     return t === team.ticker || translateTicker(t, team.league) === team.ticker;
                 });
-                return isLive && hasTeam;
             });
 
-            if (liveGame) {
-                const comp = liveGame.competitions[0];
+            if (myGame) {
+                const comp = myGame.competitions[0];
+                const statusState = myGame.status.type.state; // 'pre', 'in', 'post'
+
                 const myTeamData = comp.competitors.find((c: any) => {
                     const t = c.team.abbreviation;
                     return t === team.ticker || translateTicker(t, team.league) === team.ticker;
@@ -113,26 +117,47 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                 const oppTeamData = comp.competitors.find((c: any) => c.id !== myTeamData?.id);
 
                 if (myTeamData && oppTeamData) {
-                    setLiveGameInfo({
-                        score: `${myTeamData.team.abbreviation} ${myTeamData.score}-${oppTeamData.score} ${oppTeamData.team.abbreviation}`,
-                        time: comp.status.type.shortDetail // e.g. "3rd - 2:00"
-                    });
+                    // CASE 1: LIVE GAME
+                    if (statusState === 'in') {
+                        setTodaysGameInfo({
+                            status: 'live',
+                            score: `${myTeamData.team.abbreviation} ${myTeamData.score}-${oppTeamData.score} ${oppTeamData.team.abbreviation}`,
+                            time: comp.status.type.shortDetail // e.g. "3rd - 2:00"
+                        });
+                    } 
+                    // CASE 2: FINISHED GAME (New Feature)
+                    else if (statusState === 'post') {
+                        const myScore = parseInt(myTeamData.score);
+                        const oppScore = parseInt(oppTeamData.score);
+                        const isWin = myScore > oppScore;
+                        const isTie = myScore === oppScore;
+                        
+                        const resultChar = isWin ? 'W' : (isTie ? 'T' : 'L');
+                        const colorClass = isWin ? 'text-green-400' : (isTie ? 'text-gray-400' : 'text-red-400');
+                        const vsAt = myTeamData.homeAway === 'home' ? 'vs' : '@';
+
+                        setTodaysGameInfo({
+                            status: 'final',
+                            score: `${resultChar} ${myScore}-${oppScore} ${vsAt} ${oppTeamData.team.abbreviation}`,
+                            time: 'Final',
+                            resultColor: colorClass
+                        });
+                    }
                 }
             }
         } catch (e) {
-            console.error("Error fetching live score", e);
+            console.error("Error fetching game status", e);
         }
     };
 
-    fetchLiveScore();
-    // Poll every 60s for updates if desired
-    const interval = setInterval(fetchLiveScore, 60000);
+    fetchGameStatus();
+    const interval = setInterval(fetchGameStatus, 60000); // Check every minute
     return () => clearInterval(interval);
 
   }, [isGameToday, team.ticker, team.league]);
 
 
-  // --- FETCH LAST 5 (Uses Team Schedule) ---
+  // --- FETCH LAST 5 ---
   const handleLast5Hover = async () => {
     setShowLast5(true);
     if (last5Games.length > 0 || loadingLast5) return; 
@@ -142,13 +167,10 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
         let sport = 'football/nfl';
         if (team.league === 'NHL') sport = 'hockey/nhl';
         let searchTicker = team.ticker;
-        // Inverse map for API lookup
         if (team.league === 'NFL') {
             if(searchTicker === 'WSH') searchTicker = 'WAS';
             if(searchTicker === 'JAX') searchTicker = 'JAC';
         }
-        // NHL doesn't usually need inverse map for the URL, ESPN handles standard tickers mostly okay in URL
-        // except for maybe UTA/UTAH
 
         const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sport}/teams/${searchTicker}/schedule`);
         const data = await res.json();
@@ -357,19 +379,30 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                         
                         <span className="text-gray-700 text-[10px] hidden sm:inline">•</span>
 
-                        {/* --- NEXT GAME / LIVE SCORE AREA --- */}
-                        {liveGameInfo ? (
-                            // LIVE SCORE VIEW
-                            <div className="flex items-center gap-1.5 text-[10px] whitespace-nowrap">
-                                <span className="relative flex h-2 w-2">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                                </span>
-                                <span className="font-bold text-red-400 animate-pulse">{liveGameInfo.score}</span>
-                                <span className="text-red-300/70 font-mono hidden sm:inline">{liveGameInfo.time}</span>
-                            </div>
+                        {/* --- DYNAMIC STATUS AREA --- */}
+                        {todaysGameInfo ? (
+                            todaysGameInfo.status === 'live' ? (
+                                // --- LIVE GAME ---
+                                <div className="flex items-center gap-1.5 text-[10px] whitespace-nowrap">
+                                    <span className="relative flex h-2 w-2">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                    </span>
+                                    <span className="font-bold text-red-400 animate-pulse">{todaysGameInfo.score}</span>
+                                    <span className="text-red-300/70 font-mono hidden sm:inline">{todaysGameInfo.time}</span>
+                                </div>
+                            ) : (
+                                // --- FINAL GAME ---
+                                <div className="flex items-center gap-1.5 text-[10px] whitespace-nowrap">
+                                    <CalendarClock size={12} className="text-gray-500" />
+                                    <span className={`font-bold ${todaysGameInfo.resultColor}`}>
+                                        {todaysGameInfo.score}
+                                    </span>
+                                    <span className="text-gray-500 hidden sm:inline">Final</span>
+                                </div>
+                            )
                         ) : (
-                            // STANDARD NEXT GAME VIEW
+                            // --- PRE GAME (Default) ---
                             <div className="flex items-center gap-1.5 text-[10px] text-blue-300 whitespace-nowrap">
                                 <CalendarClock size={12} />
                                 <span className="font-bold">{team.next_opponent || '--'}</span>
