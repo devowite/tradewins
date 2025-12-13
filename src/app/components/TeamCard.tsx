@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History, CalendarDays } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History, CalendarDays, Lock } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface TeamCardProps {
@@ -34,6 +34,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       score: string;
       time: string;
       resultColor?: string; // For Final (Green/Red)
+      isClosed: boolean;    // NEW: Explicit closed flag
   } | null>(null);
 
   // --- MATH ---
@@ -54,9 +55,22 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
 
   // --- DATE CHECK ---
   const gameDate = team.next_game_at ? new Date(team.next_game_at) : null;
+  const now = new Date();
+  
+  // Check if game is today
   const isGameToday = gameDate && 
-      gameDate.getDate() === new Date().getDate() && 
-      gameDate.getMonth() === new Date().getMonth();
+      gameDate.getDate() === now.getDate() && 
+      gameDate.getMonth() === now.getMonth();
+
+  // Check if game was yesterday (for overnight pending payouts before 4am)
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isGameYesterday = gameDate && 
+      gameDate.getDate() === yesterday.getDate() && 
+      gameDate.getMonth() === yesterday.getMonth();
+
+  // We check status if it's game day OR (game was yesterday AND it's before 4am)
+  const shouldCheckGameStatus = isGameToday || (isGameYesterday && now.getHours() < 4);
 
   const getNextGameText = () => {
     if (!gameDate) return 'TBD';
@@ -86,12 +100,18 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
 
   // --- FETCH LIVE/FINAL SCORE (Scoreboard API) ---
   useEffect(() => {
-    if (!isGameToday) return; 
+    if (!shouldCheckGameStatus) return; 
 
     const fetchGameStatus = async () => {
         try {
             let sport = 'football/nfl';
             if (team.league === 'NHL') sport = 'hockey/nhl';
+            
+            // If checking yesterday's game (overnight), we might need yesterday's scoreboard
+            // However, ESPN 'scoreboard' usually shows 'today's' window. 
+            // For safety, if it's early morning, we fetch a range or rely on ESPN defaults (often shows previous day late games).
+            // For MVP simplicity, we hit the standard endpoint which usually covers "current relevant games".
+            
             const scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/scoreboard`;
 
             const res = await fetch(scoreboardUrl);
@@ -117,15 +137,16 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                 const oppTeamData = comp.competitors.find((c: any) => c.id !== myTeamData?.id);
 
                 if (myTeamData && oppTeamData) {
-                    // CASE 1: LIVE GAME
+                    // CASE 1: LIVE GAME -> CLOSED
                     if (statusState === 'in') {
                         setTodaysGameInfo({
                             status: 'live',
                             score: `${myTeamData.team.abbreviation} ${myTeamData.score}-${oppTeamData.score} ${oppTeamData.team.abbreviation}`,
-                            time: comp.status.type.shortDetail // e.g. "3rd - 2:00"
+                            time: comp.status.type.shortDetail, // e.g. "3rd - 2:00"
+                            isClosed: true
                         });
                     } 
-                    // CASE 2: FINISHED GAME (New Feature)
+                    // CASE 2: FINISHED GAME -> CLOSED (Until Payout)
                     else if (statusState === 'post') {
                         const myScore = parseInt(myTeamData.score);
                         const oppScore = parseInt(oppTeamData.score);
@@ -140,7 +161,8 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                             status: 'final',
                             score: `${resultChar} ${myScore}-${oppScore} ${vsAt} ${oppTeamData.team.abbreviation}`,
                             time: 'Final',
-                            resultColor: colorClass
+                            resultColor: colorClass,
+                            isClosed: true
                         });
                     }
                 }
@@ -154,7 +176,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
     const interval = setInterval(fetchGameStatus, 60000); // Check every minute
     return () => clearInterval(interval);
 
-  }, [isGameToday, team.ticker, team.league]);
+  }, [shouldCheckGameStatus, team.ticker, team.league]);
 
 
   // --- FETCH LAST 5 ---
@@ -335,7 +357,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
     };
     loadData();
   }, [team.id, currentPrice, myShares, userId]);
-  
+
   // Volatility Logic
   let volatilityLabel = 'Neutral';
   let volatilityColor = 'text-yellow-500';
@@ -380,9 +402,17 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
 
                 {/* TEAM INFO */}
                 <div className="flex flex-col w-full pr-2">
-                    <h3 className="font-bold text-white text-md leading-tight mb-1">
-                        {team.name}
-                    </h3>
+                    <div className="flex justify-between items-start">
+                        <h3 className="font-bold text-white text-md leading-tight mb-1">
+                            {team.name}
+                        </h3>
+                        {/* MARKET CLOSED INDICATOR */}
+                        {todaysGameInfo?.isClosed && (
+                            <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/30 px-1.5 py-0.5 rounded text-[9px] font-bold text-red-400 animate-pulse">
+                                <Lock size={8} /> CLOSED
+                            </div>
+                        )}
+                    </div>
                     
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] text-gray-500 font-mono bg-gray-900 px-1.5 py-0.5 rounded whitespace-nowrap">
