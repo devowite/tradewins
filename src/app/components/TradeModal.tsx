@@ -1,152 +1,337 @@
 'use client';
-import { useState } from 'react';
-import { HelpCircle } from 'lucide-react';
 
-export default function TradeModal({ team, userBalance, userShares, onClose, onConfirm }: any) {
-  const [amount, setAmount] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [mode, setMode] = useState<'BUY' | 'SELL'>('BUY'); 
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { X, DollarSign, AlertCircle, Lock } from 'lucide-react';
 
-  // --- MATH ENGINE ---
-  const SLOPE = 0.01;
-  const BASE_PRICE = 10.00;
-  const RESERVE_RATIO = 0.85; 
+interface TradeModalProps {
+  team: any;
+  isOpen: boolean;
+  onClose: () => void;
+  userId?: string;
+  onSuccess?: () => void;
+}
 
-  // 1. Spot Price (Current Price)
-  const currentSpotPrice = BASE_PRICE + (team.shares_outstanding * SLOPE);
+export default function TradeModal({ team, isOpen, onClose, userId, onSuccess }: TradeModalProps) {
+  const [mode, setMode] = useState<'BUY' | 'SELL'>('BUY');
+  const [amount, setAmount] = useState<number>(0); 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [userBalance, setUserBalance] = useState(0);
+  const [userShares, setUserShares] = useState(0);
 
-  // 2. Buy Calculation
-  const buyEndPrice = BASE_PRICE + ((team.shares_outstanding + amount) * SLOPE);
-  const buyAvgPrice = (currentSpotPrice + buyEndPrice) / 2;
-  const buyTotalCost = buyAvgPrice * amount;
+  // --- MARKET SECURITY STATE ---
+  const [marketStatus, setMarketStatus] = useState<'OPEN' | 'CLOSED' | 'LOADING'>('LOADING');
+  const [marketMessage, setMarketMessage] = useState('');
 
-  // 3. Sell Calculation
-  const sellEndPrice = BASE_PRICE + ((team.shares_outstanding - amount) * SLOPE);
-  const sellAvgPrice = (currentSpotPrice + sellEndPrice) / 2;
-  const sellGross = sellAvgPrice * amount;
-  const sellPayout = sellGross * RESERVE_RATIO; 
+  // 1. Calculate Price 
+  const currentPrice = 10.00 + (team.shares_outstanding * 0.01);
 
-  // --- VALIDATION ---
-  const canAffordBuy = userBalance >= buyTotalCost;
-  const hasEnoughShares = userShares >= amount;
-  const isValid = mode === 'BUY' ? canAffordBuy : hasEnoughShares;
-  const isSellValid = amount <= team.shares_outstanding;
+  // 2. Fetch Data (On Open)
+  useEffect(() => {
+    if (isOpen && userId) {
+      setAmount(0);
+      setError(null);
+      fetchUserData();
+      checkMarketStatus();
+    }
+  }, [isOpen, userId, team]);
 
-  const handleSubmit = async () => {
-    if (!isValid || isSubmitting) return;
-    if (mode === 'SELL' && !isSellValid) return;
+  const fetchUserData = async () => {
+    const { data: userData } = await supabase.from('users').select('usd_balance').eq('id', userId).single();
+    if (userData) setUserBalance(userData.usd_balance);
 
-    setIsSubmitting(true);
-    await onConfirm(amount, mode);
-    setIsSubmitting(false);
+    const { data: shareData } = await supabase.from('holdings').select('shares_owned').eq('user_id', userId).eq('team_id', team.id).maybeSingle();
+    if (shareData) setUserShares(shareData.shares_owned);
+    else setUserShares(0);
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 border border-gray-600 rounded-xl w-full max-w-md p-6 shadow-2xl relative overflow-visible">
-        
-        {/* Close Button */}
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white z-10">✕</button>
+  // --- SECURITY CHECK: PREVENT EXPLOIT ---
+  const checkMarketStatus = async () => {
+    setMarketStatus('LOADING');
+    try {
+        let sport = 'football/nfl';
+        if (team.league === 'NHL') sport = 'hockey/nhl';
 
-        {/* HEADER & TOGGLE */}
-        <div className="flex border-b border-gray-700 mb-6">
-            <button 
-                onClick={() => setMode('BUY')}
-                className={`flex-1 py-3 font-bold text-center transition ${mode === 'BUY' ? 'text-green-400 border-b-2 border-green-400 bg-green-900/10' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-                BUY
-            </button>
-            <button 
-                onClick={() => setMode('SELL')}
-                className={`flex-1 py-3 font-bold text-center transition ${mode === 'SELL' ? 'text-red-400 border-b-2 border-red-400 bg-red-900/10' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-                SELL
-            </button>
-        </div>
+        // 1. Calculate Dates: Get Yesterday and Today in YYYYMMDD format
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
 
-        <h2 className="text-2xl font-bold mb-1">{mode} {team.name}</h2>
-        <p className="text-gray-400 text-sm mb-6">
-            ${team.ticker} • Price: <span className={mode === 'BUY' ? 'text-green-400' : 'text-red-400'}>${currentSpotPrice.toFixed(2)}</span>
-            <span className="mx-2">•</span>
-            Owned: {userShares}
-        </p>
+        const formatDate = (d: Date) => d.toISOString().split('T')[0].replace(/-/g, '');
+        const datesParam = `${formatDate(yesterday)}-${formatDate(today)}`; // Range: "20231212-20231213"
 
-        {/* INPUT */}
-        <div className="mb-6">
-          <div className="flex justify-between items-end mb-2">
-            <label className="text-sm text-gray-400">Shares to {mode.toLowerCase()}</label>
+        const scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/scoreboard?dates=${datesParam}`;
+
+        const res = await fetch(scoreboardUrl);
+        const data = await res.json();
+        const events = data.events || [];
+
+        // 2. Find ANY games involving this team (Yesterday OR Today)
+        const relevantGames = events.filter((e: any) => {
+            return e.competitions[0].competitors.some((c: any) => {
+                const t = c.team.abbreviation;
+                return t === team.ticker || 
+                       (t === 'WAS' && team.ticker === 'WSH') ||
+                       (t === 'JAC' && team.ticker === 'JAX') ||
+                       (t === 'LA' && team.ticker === 'LAR') ||
+                       (t === 'TB' && team.ticker === 'TBL') ||
+                       (t === 'SJ' && team.ticker === 'SJS') ||
+                       (t === 'NJ' && team.ticker === 'NJD') ||
+                       (t === 'MON' && team.ticker === 'MTL') ||
+                       (t === 'UTA' && team.ticker === 'UTAH');
+            });
+        });
+
+        // 3. Analyze Status
+        let isClosed = false;
+        let message = '';
+        const currentHour = new Date().getHours(); // 0-23
+
+        for (const game of relevantGames) {
+            const state = game.status.type.state; // 'pre', 'in', 'post'
+            const gameDateStr = game.date; // ISO string
+            const gameDate = new Date(gameDateStr);
+            const isGameToday = gameDate.getDate() === today.getDate();
+
+            if (state === 'in') {
+                isClosed = true;
+                message = 'Market Closed: Game in Progress';
+                break;
+            }
             
-            {/* SELL ALL BUTTON */}
-            {mode === 'SELL' && (
-                <button 
-                    onClick={() => setAmount(userShares)}
-                    className="text-xs font-bold text-blue-400 hover:text-blue-300 underline"
-                >
-                    Sell All (Max: {userShares})
-                </button>
-            )}
-          </div>
-          
-          <input 
-            type="number" 
-            min="1"
-            max={mode === 'SELL' ? userShares : undefined}
-            value={amount}
-            onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
-            className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white w-full focus:outline-none focus:border-blue-500 font-mono text-lg"
-          />
-        </div>
+            if (state === 'post') {
+                // Game Finished. 
+                // IF it was Today: Close it.
+                // IF it was Yesterday: Close it ONLY if it's early morning (before 6 AM)
+                if (isGameToday) {
+                    isClosed = true;
+                    message = 'Market Closed: Game Finished (Payout Pending)';
+                    break;
+                } else {
+                    // It was yesterday. Is it safe yet?
+                    // We assume Cron runs at 4 AM. We give a buffer until 6 AM.
+                    if (currentHour < 6) {
+                        isClosed = true;
+                        message = 'Market Closed: Pending Overnight Payout';
+                        break;
+                    }
+                }
+            }
+        }
 
-        {/* RECEIPT PREVIEW */}
-        <div className="bg-gray-900 rounded-lg p-4 mb-6 space-y-2 text-sm">
-          {mode === 'BUY' ? (
-            <>
-                <div className="flex justify-between">
-                    <span className="text-gray-400">Est. Cost</span>
-                    <span className="font-mono text-white">${buyTotalCost.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span className="text-gray-400">New Balance</span>
-                    <span className={`font-mono ${canAffordBuy ? 'text-gray-300' : 'text-red-500'}`}>
-                    ${(userBalance - buyTotalCost).toFixed(2)}
+        if (isClosed) {
+            setMarketStatus('CLOSED');
+            setMarketMessage(message);
+        } else {
+            setMarketStatus('OPEN');
+        }
+
+    } catch (e) {
+        console.error("Market Check Error", e);
+        setMarketStatus('OPEN'); 
+    }
+  };
+
+  const calculateTotal = () => {
+    if (!amount) return 0;
+    return amount * currentPrice; 
+  };
+
+  const handleExecute = async () => {
+    if (!userId || amount <= 0) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const totalCost = calculateTotal();
+
+      if (mode === 'BUY') {
+        if (marketStatus === 'CLOSED') {
+            throw new Error("Market is closed for this team.");
+        }
+        if (totalCost > userBalance) {
+          throw new Error(`Insufficient funds. You need $${totalCost.toFixed(2)}`);
+        }
+        
+        const { error } = await supabase.rpc('buy_shares', {
+          p_user_id: userId,
+          p_team_id: team.id,
+          p_amount: amount,
+          p_price: currentPrice
+        });
+        if (error) throw error;
+
+      } else {
+        if (amount > userShares) {
+          throw new Error(`You only have ${userShares} shares.`);
+        }
+
+        const { error } = await supabase.rpc('sell_shares', {
+          p_user_id: userId,
+          p_team_id: team.id,
+          p_amount: amount
+        });
+        if (error) throw error;
+      }
+
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-gray-900 border border-gray-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
+        
+        {/* HEADER */}
+        <div className="flex justify-between items-center p-5 border-b border-gray-800 bg-gray-900">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              {team.name} <span className="text-gray-500 text-sm font-normal">({team.ticker})</span>
+            </h2>
+            <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-mono text-gray-400">
+                    Current Price: <span className="text-white font-bold">${currentPrice.toFixed(2)}</span>
+                </span>
+                
+                {marketStatus === 'CLOSED' ? (
+                    <span className="flex items-center gap-1 text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded">
+                        <Lock size={10} /> MARKET CLOSED
                     </span>
-                </div>
-            </>
-          ) : (
-            <>
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2 group relative cursor-help">
-                        <span className="text-gray-400 border-b border-dotted border-gray-600">Est. Payout</span>
-                        <HelpCircle size={14} className="text-gray-500 hover:text-white transition" />
-                        
-                        {/* TOOLTIP POPUP */}
-                        <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 w-64 p-3 bg-black border border-gray-700 rounded shadow-xl text-xs text-gray-300 z-50">
-                            <p className="mb-1 text-white font-bold">Why is this lower?</p>
-                            To guarantee instant liquidity, the Sell Price is based on the Reserve Pool (85% of spot value). The remaining 15% remains in the Dividend Bank to pay winners.
-                        </div>
-                    </div>
-                    
-                    <span className="font-mono text-green-400 font-bold text-lg">${sellPayout.toFixed(2)}</span>
-                </div>
-            </>
-          )}
+                ) : marketStatus === 'OPEN' ? (
+                    <span className="flex items-center gap-1 text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded">
+                        MARKET OPEN
+                    </span>
+                ) : (
+                    <span className="text-[10px] text-gray-500 animate-pulse">Checking Status...</span>
+                )}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition p-1 hover:bg-gray-800 rounded-full">
+            <X size={24} />
+          </button>
         </div>
 
-        {/* ACTION BUTTON */}
-        <button 
-          onClick={handleSubmit}
-          disabled={!isValid || isSubmitting}
-          className={`w-full py-3 rounded-lg font-bold transition ${
-            !isValid 
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : mode === 'BUY'
-                    ? 'bg-green-600 hover:bg-green-500 text-white'
-                    : 'bg-red-600 hover:bg-red-500 text-white'
-          }`}
-        >
-          {isSubmitting ? 'Processing...' : !isValid ? (mode === 'BUY' ? 'Insufficient Funds' : 'Insufficient Shares') : `Confirm ${mode}`}
-        </button>
+        {/* MARKET CLOSED WARNING */}
+        {marketStatus === 'CLOSED' && mode === 'BUY' && (
+            <div className="bg-red-500/10 border-b border-red-500/20 p-3 flex items-start gap-3">
+                <AlertCircle className="text-red-400 shrink-0" size={18} />
+                <p className="text-xs text-red-200 leading-relaxed">
+                    <strong>Trading Suspended:</strong> {marketMessage}. <br/>
+                    Buying is disabled until the daily payout process completes (approx 6 AM ET).
+                </p>
+            </div>
+        )}
 
+        {/* BODY */}
+        <div className="p-6 space-y-6">
+          
+          <div className="grid grid-cols-2 gap-2 bg-gray-800 p-1 rounded-lg">
+            <button 
+              onClick={() => setMode('BUY')}
+              disabled={marketStatus === 'CLOSED'} 
+              className={`py-2 text-sm font-bold rounded-md transition-all ${
+                mode === 'BUY' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              } ${marketStatus === 'CLOSED' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              Buy
+            </button>
+            <button 
+              onClick={() => setMode('SELL')}
+              className={`py-2 text-sm font-bold rounded-md transition-all ${
+                mode === 'SELL' 
+                  ? 'bg-red-600 text-white shadow-lg' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              Sell
+            </button>
+          </div>
+
+          <div className="space-y-4">
+             <div className="flex justify-between text-xs text-gray-400 px-1">
+                <span>{mode === 'BUY' ? 'Buying' : 'Selling'} Amount</span>
+                <span>
+                    {mode === 'BUY' 
+                        ? `Balance: $${userBalance.toFixed(2)}`
+                        : `Owned: ${userShares} Shares`
+                    }
+                </span>
+             </div>
+
+             <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <input 
+                  type="number" 
+                  min="1"
+                  value={amount || ''}
+                  onChange={(e) => setAmount(Math.floor(Number(e.target.value)))}
+                  className="w-full bg-gray-950 border border-gray-700 rounded-xl py-4 pl-10 pr-4 text-white text-lg font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent transition outline-none"
+                  placeholder="0"
+                  disabled={marketStatus === 'CLOSED' && mode === 'BUY'}
+                />
+             </div>
+             
+             <div className="flex gap-2">
+                {[1, 5, 10, 25, 50].map((num) => (
+                    <button 
+                        key={num}
+                        onClick={() => setAmount(num)}
+                        disabled={marketStatus === 'CLOSED' && mode === 'BUY'}
+                        className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded border border-gray-700 transition"
+                    >
+                        {num}
+                    </button>
+                ))}
+             </div>
+          </div>
+
+          <div className="bg-gray-800/50 rounded-xl p-4 space-y-2 border border-gray-700/50">
+             <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Price per share</span>
+                <span className="text-white font-mono">${currentPrice.toFixed(2)}</span>
+             </div>
+             <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Total {mode === 'BUY' ? 'Cost' : 'Value'}</span>
+                <span className={`font-mono font-bold text-lg ${mode === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
+                    ${calculateTotal().toFixed(2)}
+                </span>
+             </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg flex items-center gap-2 animate-in slide-in-from-top-1">
+                <AlertCircle size={16} />
+                {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleExecute}
+            disabled={loading || amount <= 0 || (marketStatus === 'CLOSED' && mode === 'BUY')}
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg active:scale-[0.98] ${
+                loading ? 'bg-gray-700 text-gray-500 cursor-wait' :
+                (marketStatus === 'CLOSED' && mode === 'BUY') ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50' :
+                mode === 'BUY' ? 'bg-green-600 hover:bg-green-500 text-white shadow-green-900/20' :
+                'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20'
+            }`}
+          >
+            {loading ? 'Processing...' : (
+                marketStatus === 'CLOSED' && mode === 'BUY' ? 'MARKET CLOSED' :
+                `Confirm ${mode} ($${calculateTotal().toFixed(2)})`
+            )}
+          </button>
+
+        </div>
       </div>
     </div>
   );
