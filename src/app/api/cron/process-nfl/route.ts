@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// ESPN Scoreboard is the most reliable source for both live records and game status
 const ESPN_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 
+// ONE-WAY MAP: ESPN Ticker -> Your DB Ticker
+// Only include teams where ESPN differs from your database.
 const TICKER_MAP: Record<string, string> = {
-    'WSH': 'WAS', 'WAS': 'WSH',
-    'JAC': 'JAX', 'JAX': 'JAC',
-    'LA': 'LAR',  'LAR': 'LA'
+    'WAS': 'WSH', // ESPN sends WAS, DB needs WSH
+    'JAC': 'JAX', // ESPN sometimes sends JAC, DB needs JAX
+    'LA': 'LAR',  // ESPN sends LA, DB needs LAR
+    // Note: Do NOT add 'JAX': 'JAC' or 'LAR': 'LA' here. 
+    // If ESPN sends 'JAX', we want it to stay 'JAX'.
 };
 
 export const dynamic = 'force-dynamic'; 
 
 export async function GET(request: Request) {
-  // Use Admin Client to bypass RLS
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -35,9 +37,14 @@ export async function GET(request: Request) {
       // --- PART 1: PROCESS TEAMS (Records) ---
       for (const competitor of competition.competitors) {
         let ticker = competitor.team.abbreviation;
-        if (TICKER_MAP[ticker]) ticker = TICKER_MAP[ticker];
+        
+        // Apply Translation (Safe One-Way)
+        if (TICKER_MAP[ticker]) {
+            log.push(`Translating ${ticker} -> ${TICKER_MAP[ticker]}`);
+            ticker = TICKER_MAP[ticker];
+        }
 
-        // 1. Get Record (e.g. "12-1-0")
+        // 1. Get Record
         const recordObj = competitor.records?.find((r: any) => r.name === 'overall');
         const recordString = recordObj ? recordObj.summary : '0-0-0';
         
@@ -47,10 +54,13 @@ export async function GET(request: Request) {
         const ties = parseInt(parts[2]) || 0;
 
         // 2. Update DB
-        await supabaseAdmin.from('teams')
+        const { error } = await supabaseAdmin
+            .from('teams')
             .update({ wins, losses, otl: ties })
             .eq('ticker', ticker)
             .eq('league', 'NFL');
+            
+        if (error) log.push(`Error updating ${ticker}: ${error.message}`);
       }
 
       // --- PART 2: PROCESS PAYOUTS (Winners) ---
@@ -61,7 +71,6 @@ export async function GET(request: Request) {
             let winnerTicker = winner.team.abbreviation;
             if (TICKER_MAP[winnerTicker]) winnerTicker = TICKER_MAP[winnerTicker];
 
-            // Find Team ID
             const { data: teamData } = await supabaseAdmin
                 .from('teams')
                 .select('id, name')
@@ -70,16 +79,8 @@ export async function GET(request: Request) {
                 .single();
 
             if (teamData) {
-                // Trigger Payout via RPC
-                // Note: The database function 'simulate_win' should ideally handle
-                // avoiding double-payouts, or we rely on this running infrequently.
                 const { error } = await supabaseAdmin.rpc('simulate_win', { p_team_id: teamData.id });
-                
-                if (!error) {
-                    log.push(`PAYOUT SUCCESS: ${teamData.name}`);
-                } else {
-                    log.push(`Payout Error ${teamData.name}: ${error.message}`);
-                }
+                if (!error) log.push(`PAYOUT SUCCESS: ${teamData.name}`);
             }
         }
       }
