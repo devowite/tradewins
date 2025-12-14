@@ -76,7 +76,7 @@ export default function MarketStats({ marketCap, volume24hShares, volume24hDolla
         label="Total Dividend Pot" 
         value={`$${totalBank.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
         color="text-yellow-400"
-        tooltip="Total cash currently sitting in all Team Banks, waiting to be paid out to winners."
+        tooltip="Total sum of all outstanding dividends, waiting to be paid out to winners."
       />
 
     </div>

@@ -660,6 +660,12 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                     <div className="flex items-center gap-1 group cursor-help relative">
                         <span className="text-gray-400 border-b border-dotted border-gray-600">Liquidity (Reserve)</span>
                         <HelpCircle size={12} className="text-gray-500 hover:text-white" />
+                        
+                        {/* The Tooltip */}
+                        <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 w-48 p-3 bg-black border border-gray-700 rounded-lg shadow-xl text-[10px] text-gray-300 z-50 pointer-events-none">
+                            <p className="mb-1 font-bold text-white">Market Stability</p>
+                            This is the cash pool available to buy back shares. Higher liquidity means the price won't crash as hard when players sell.
+                        </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
