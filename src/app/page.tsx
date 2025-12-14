@@ -314,7 +314,7 @@ export default function Home() {
                                     : 'text-gray-400 hover:text-white'
                                 }`}
                             >
-                                {opt === 'NAME' ? 'A-Z' : opt === 'PRICE' ? 'Price' : opt === 'CHANGE' ? '24h %' : 'Win/Share'}
+                                {opt === 'NAME' ? 'A-Z' : opt === 'PRICE' ? 'Price' : opt === 'CHANGE' ? '24h %' : 'Dividend'}
                             </button>
                         ))}
                     </div>
