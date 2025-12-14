@@ -33,13 +33,12 @@ export async function GET(request: Request) {
     const log: string[] = [];
     const now = new Date();
     
-    // --- FETCH RANGE: Yesterday to +14 Days ---
-    // NFL teams play once a week, so we need a wider window (14 days) 
-    // to ensure we catch the NEXT game if they just played on Thursday.
+    // --- FETCH RANGE: -6 Days to +7 Days ---
+    // Widen start to -6 to ensure we catch Thursday games when running on Saturday/Sunday.
     const start = new Date(now);
-    start.setDate(start.getDate() - 1);
+    start.setDate(start.getDate() - 6); 
     const end = new Date(now);
-    end.setDate(end.getDate() + 14);
+    end.setDate(end.getDate() + 7);
     
     const formatDate = (d: Date) => d.toISOString().split('T')[0].replace(/-/g, '');
     const datesParam = `${formatDate(start)}-${formatDate(end)}`;
@@ -67,14 +66,24 @@ export async function GET(request: Request) {
       let awayTicker = awayTeam.team.abbreviation;
       if (TICKER_MAP[awayTicker]) awayTicker = TICKER_MAP[awayTicker];
 
-      // --- 1. LOCK SCHEDULE FOR ACTIVE/RECENT GAMES ---
-      const hoursSinceStart = (now.getTime() - gameDate.getTime()) / (1000 * 60 * 60);
+      // --- 1. LOCK SCHEDULE LOGIC ---
+      // Goal: Keep results visible until the following Tuesday at 9 AM.
       
-      // Keep "Last Night's" game visible for 6 hours after start
-      if (state === 'in' || (state === 'post' && hoursSinceStart < 6)) {
+      // Calculate "Reset Date" (Next Tuesday relative to the Game)
+      const dayOfWeek = gameDate.getDay(); // 0=Sun, 1=Mon... 4=Thu
+      let daysUntilTuesday = (2 - dayOfWeek + 7) % 7;
+      if (daysUntilTuesday === 0) daysUntilTuesday = 7; // If game is Tue, show until next Tue
+
+      const resetDate = new Date(gameDate);
+      resetDate.setDate(gameDate.getDate() + daysUntilTuesday);
+      resetDate.setHours(9, 0, 0, 0); // 9 AM Reset Time
+
+      // LOCK IF: Game is Live OR (Game is Final AND It is not yet Tuesday)
+      if (state === 'in' || (state === 'post' && now < resetDate)) {
           scheduleUpdated.add(homeTicker);
           scheduleUpdated.add(awayTicker);
           
+          // Force DB to show THIS game (so TeamCard displays the result)
           await supabaseAdmin.from('teams').update({
              next_opponent: awayTicker,
              next_game_at: gameDate.toISOString()
@@ -103,6 +112,7 @@ export async function GET(request: Request) {
       }
 
       // --- 3. UPDATE SCHEDULE (Future Games) ---
+      // Only update to a future game if we HAVEN'T locked a recent game above.
       if (!isCompleted && gameDate > now) {
          if (homeTeam && awayTeam) {
              const updateSchedule = async (tTicker: string, oppTicker: string) => {
