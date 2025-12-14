@@ -47,10 +47,14 @@ export default function Login() {
         
         {/* LOGO */}
         <div className="flex flex-col items-center mb-8">
-            <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 mb-4">
-                <Trophy size={24} className="text-white" />
+            <div className="h-20 w-auto mb-4 flex items-center justify-center">
+                <img 
+                    src="/logo.png" 
+                    alt="Tradium Logo" 
+                    className="h-full w-full object-contain drop-shadow-lg" 
+                />
             </div>
-            <h1 className="text-2xl font-bold text-white">Welcome to Sportex</h1>
+            <h1 className="text-2xl font-bold text-white">Welcome to Tradium</h1>
             <p className="text-gray-400 text-sm">The Live Sports Stock Market</p>
         </div>
 

@@ -215,8 +215,13 @@ export default function Home() {
       {/* SIDEBAR */}
       <aside className="w-20 bg-gray-950 border-r border-gray-800 flex flex-col items-center py-6 gap-8 z-20 justify-between">
         <div className="flex flex-col items-center gap-8 w-full">
-            <div className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20">
-                <Trophy size={20} className="text-white" />
+            {/* APP LOGO */}
+            <div className="h-12 w-12 flex items-center justify-center">
+                <img 
+                    src="/logo.png" 
+                    alt="Tradium" 
+                    className="h-full w-full object-contain" 
+                />
             </div>
             <nav className="flex flex-col gap-6 w-full px-2">
                 <button onClick={() => setActiveTab('MARKETS')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'MARKETS' ? 'bg-gray-800 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>
