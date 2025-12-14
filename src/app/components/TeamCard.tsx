@@ -39,7 +39,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId, is
       isClosed: boolean;    // Market Closed Flag
   } | null>(null);
 
-// --- ADMIN: VIEW HOLDERS (ROBUST VERSION) ---
+// --- ADMIN: VIEW HOLDERS (API VERSION) ---
 const [showHolders, setShowHolders] = useState(false);
 const [holders, setHolders] = useState<any[]>([]);
 const [loadingHolders, setLoadingHolders] = useState(false);
@@ -49,51 +49,25 @@ const handleViewHolders = async (e: React.MouseEvent) => {
   setShowHolders(true);
   setLoadingHolders(true);
   
-  // Step 1: Fetch holdings strictly (No joins yet)
-  const { data: rawHoldings, error: holdingsError } = await supabase
-      .from('holdings')
-      .select('user_id, shares_owned')
-      .eq('team_id', team.id)
-      .gt('shares_owned', 0);
-
-  if (holdingsError) {
-      console.error("Admin Error (Holdings):", holdingsError);
-      alert("Error fetching holdings. Check console.");
+  try {
+      const res = await fetch('/api/admin/get-holders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: team.id })
+      });
+      
+      const data = await res.json();
+      
+      if (data.holders) {
+          setHolders(data.holders);
+      } else {
+          setHolders([]);
+      }
+  } catch (err) {
+      console.error("Admin API Error:", err);
+  } finally {
       setLoadingHolders(false);
-      return;
   }
-
-  if (!rawHoldings || rawHoldings.length === 0) {
-      setHolders([]);
-      setLoadingHolders(false);
-      return;
-  }
-
-  // Step 2: Fetch Profiles for these specific users
-  const userIds = rawHoldings.map((h: any) => h.user_id);
-  const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, email, username')
-      .in('id', userIds);
-
-  if (profilesError) {
-      console.error("Admin Error (Profiles):", profilesError);
-  }
-
-  // Step 3: Merge the data manually in Javascript
-  const mergedData = rawHoldings.map((h: any) => {
-      const profile = profiles?.find((p: any) => p.id === h.user_id);
-      return {
-          shares_owned: h.shares_owned,
-          profiles: profile || { email: 'Unknown', username: 'Unknown' } // Fallback
-      };
-  });
-
-  // Step 4: Sort by shares (Highest to Lowest)
-  mergedData.sort((a: any, b: any) => b.shares_owned - a.shares_owned);
-
-  setHolders(mergedData);
-  setLoadingHolders(false);
 };
 
   // --- MATH ---
@@ -799,8 +773,8 @@ const handleViewHolders = async (e: React.MouseEvent) => {
                                 {holders.map((h: any, i) => (
                                     <tr key={i} className="hover:bg-gray-800/50">
                                         <td className="px-3 py-2 text-white">
-                                            {h.profiles?.username || h.profiles?.email || 'Unknown'}
-                                        </td>
+    {h.user_display}
+</td>
                                         <td className="px-3 py-2 text-right font-mono text-blue-300">
                                             {h.shares_owned}
                                         </td>
