@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SportEx",
-  description: "Always win, never lose.",
+  title: "Tradium",
+  description: "The Sports Exchange",
 };
 
 export default function RootLayout({
