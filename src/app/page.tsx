@@ -372,6 +372,7 @@ export default function Home() {
                                             onTrade={setSelectedTeam}
                                             onSimWin={user?.is_admin ? handleSimulateWin : undefined}
                                             userId={user?.id}
+                                            isAdmin={user?.is_admin}
                                         />
                                     ))}
                                 </div>
@@ -389,6 +390,7 @@ export default function Home() {
                                         onTrade={setSelectedTeam}
                                         onSimWin={user?.is_admin ? handleSimulateWin : undefined}
                                         userId={user?.id}
+                                        isAdmin={user?.is_admin}
                                     />
                                 ))}
                             </div>

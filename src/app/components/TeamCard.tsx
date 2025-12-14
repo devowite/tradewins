@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History, CalendarDays, Lock } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, TrendingUp, TrendingDown, CalendarClock, History, CalendarDays, Lock, Users, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
 
 interface TeamCardProps {
   team: any;
@@ -11,9 +12,10 @@ interface TeamCardProps {
   onTrade: (team: any) => void;
   onSimWin?: (id: number, name: string) => void;
   userId?: string;
+  isAdmin?: boolean;
 }
 
-export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: TeamCardProps) {
+export default function TeamCard({ team, myShares, onTrade, onSimWin, userId, isAdmin }: TeamCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [changePercent, setChangePercent] = useState(0);
@@ -36,6 +38,28 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       resultColor?: string; // For Final (Green/Red)
       isClosed: boolean;    // Market Closed Flag
   } | null>(null);
+
+// --- ADMIN: VIEW HOLDERS ---
+const [showHolders, setShowHolders] = useState(false);
+const [holders, setHolders] = useState<any[]>([]);
+const [loadingHolders, setLoadingHolders] = useState(false);
+
+const handleViewHolders = async (e: React.MouseEvent) => {
+  e.stopPropagation();
+  setShowHolders(true);
+  setLoadingHolders(true);
+  
+  // Fetch holdings + Profile data
+  const { data, error } = await supabase
+      .from('holdings')
+      .select('shares_owned, profiles:user_id (email, username)')
+      .eq('team_id', team.id)
+      .gt('shares_owned', 0)
+      .order('shares_owned', { ascending: false });
+
+  if (data) setHolders(data);
+  setLoadingHolders(false);
+};
 
   // --- MATH ---
   const currentPrice = 10.00 + (team.shares_outstanding * 0.01);
@@ -690,9 +714,71 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                 )}
             </button>
                 
+{/* --- ADMIN BUTTON --- */}
+{isAdmin && (
+                    <button 
+                        onClick={handleViewHolders}
+                        className="px-3 bg-gray-700 hover:bg-blue-600 text-gray-400 hover:text-white rounded-lg transition flex items-center justify-center"
+                        title="View Holders"
+                    >
+                        <Users size={16} />
+                    </button>
+                )}
+                
                 {onSimWin && (
                     <button onClick={(e) => { e.stopPropagation(); onSimWin(team.id, team.name); }} className="px-3 bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white rounded-lg text-xs uppercase font-bold transition">Sim Win</button>
                 )}
+            </div>
+        </div>
+      )}
+      {/* --- ADMIN HOLDERS MODAL --- */}
+      {showHolders && (
+        <div 
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-default"
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="bg-gray-900 border border-gray-700 w-full max-w-sm rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-800">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                        <Users size={16} className="text-blue-400" /> Shareholders
+                    </h3>
+                    <button onClick={() => setShowHolders(false)} className="text-gray-500 hover:text-white">
+                        <X size={18} />
+                    </button>
+                </div>
+                
+                <div className="overflow-y-auto p-2">
+                    {loadingHolders ? (
+                        <p className="text-center text-gray-500 text-xs py-4">Loading data...</p>
+                    ) : holders.length === 0 ? (
+                        <p className="text-center text-gray-500 text-xs py-4">No shares owned by players.</p>
+                    ) : (
+                        <table className="w-full text-left text-xs text-gray-400">
+                            <thead className="text-[10px] uppercase font-bold text-gray-500 bg-gray-900 sticky top-0">
+                                <tr>
+                                    <th className="px-3 py-2">User</th>
+                                    <th className="px-3 py-2 text-right">Shares</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-800">
+                                {holders.map((h: any, i) => (
+                                    <tr key={i} className="hover:bg-gray-800/50">
+                                        <td className="px-3 py-2 text-white">
+                                            {h.profiles?.username || h.profiles?.email || 'Unknown'}
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-mono text-blue-300">
+                                            {h.shares_owned}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                
+                <div className="p-2 border-t border-gray-800 bg-gray-900 text-[10px] text-center text-gray-600">
+                    {holders.length} Total Investors
+                </div>
             </div>
         </div>
       )}
