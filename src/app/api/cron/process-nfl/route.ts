@@ -165,7 +165,7 @@ const { data: teamData } = await supabaseAdmin
     .from('teams')
     .select('id, name')
     .eq('ticker', winnerTicker)
-    .eq('league', 'NHL') // NOTE: Change to 'NFL' for the NFL file
+    .eq('league', 'NFL') // NOTE: Change to 'NFL' for the NFL file
     .single();
 
 if (teamData) {
