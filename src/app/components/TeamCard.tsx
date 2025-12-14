@@ -69,9 +69,12 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       gameDate.getDate() === yesterday.getDate() && 
       gameDate.getMonth() === yesterday.getMonth();
 
-  // We check status if it's game day OR (game was yesterday AND it's before Noon - covering late night games)
-  const shouldCheckGameStatus = isGameToday || (isGameYesterday && now.getHours() < 12);
-
+// FIX: Allow checking status for past games if they are the "current" DB entry
+  // This allows Thursday scores to show on Saturday/Sunday
+  const isGamePast = gameDate && gameDate < now;
+  
+  // We check status if it's game day OR if the game is in the past (but still the 'next_game_at')
+  const shouldCheckGameStatus = isGameToday || isGamePast;
   const getNextGameText = () => {
     if (!gameDate) return 'TBD';
     const timeStr = gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
