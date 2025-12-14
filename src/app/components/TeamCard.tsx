@@ -52,7 +52,8 @@ const handleViewHolders = async (e: React.MouseEvent) => {
   // Fetch holdings + Profile data
   const { data, error } = await supabase
       .from('holdings')
-      .select('shares_owned, profiles:user_id (email, username)')
+      // Removed ":user_id" to let Supabase find the default foreign key automatically
+        .select('shares_owned, profiles (email, username)')
       .eq('team_id', team.id)
       .gt('shares_owned', 0)
       .order('shares_owned', { ascending: false });
