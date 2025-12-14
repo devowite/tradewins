@@ -117,30 +117,46 @@ export default function TradeModal({ team, isOpen, onClose, userId, userBalance,
 
         let isClosed = false;
         let message = '';
-        const currentHour = new Date().getHours(); 
-
+        
+        // Iterate to find the status of my game
         for (const game of relevantGames) {
             const state = game.status.type.state; 
-            const gameDate = new Date(game.date);
-            const isGameToday = gameDate.getDate() === today.getDate();
+            const gameId = String(game.id);
 
+            // CASE 1: LIVE GAME -> ALWAYS CLOSED
             if (state === 'in') {
                 isClosed = true;
                 message = 'Game in Progress';
-                break;
+                break; 
             }
+            
+            // CASE 2: FINAL (POST) -> SMART CHECK
             if (state === 'post') {
-                if (isGameToday) {
-                    isClosed = true;
-                    message = 'Game Finished (Payout Pending)';
-                    break;
-                } else {
-                    if (currentHour < 6) {
-                        isClosed = true;
-                        message = 'Pending Overnight Payout';
-                        break;
-                    }
-                }
+                 // A. Check Database for Payout Log (Immediate Unlock)
+                 const { data: processed } = await supabase
+                    .from('processed_games')
+                    .select('game_id')
+                    .eq('game_id', gameId)
+                    .single();
+                 
+                 if (processed) {
+                     // Payout confirmed -> MARKET OPEN
+                     isClosed = false; 
+                 } else {
+                     // B. No Payout yet -> Use Time Buffer Safety
+                     const gameStart = new Date(game.date);
+                     const now = new Date();
+                     const diffHours = (now.getTime() - gameStart.getTime()) / (1000 * 60 * 60);
+                     
+                     // NHL: 4h buffer, NFL: 5h buffer
+                     const lockThreshold = team.league === 'NFL' ? 5.0 : 4.0;
+                     
+                     if (diffHours < lockThreshold) {
+                         isClosed = true;
+                         message = 'Game Final - Payout Pending';
+                         break; 
+                     }
+                 }
             }
         }
 
@@ -156,7 +172,6 @@ export default function TradeModal({ team, isOpen, onClose, userId, userBalance,
         setMarketStatus('OPEN');
     }
   };
-
   // --- 3. HANDLERS ---
   const handleSetMax = () => {
       if (mode === 'SELL') {

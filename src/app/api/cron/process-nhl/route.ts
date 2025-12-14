@@ -16,7 +16,6 @@ export async function GET(request: Request) {
     const log = [];
 
     // --- PART A: UPDATE STANDINGS (Wins/Losses) ---
-    // (Keep this existing logic to keep records fresh)
     const standingsRes = await fetch(`${NHL_API_BASE}/standings/now`);
     const standingsData = await standingsRes.json();
 
@@ -29,51 +28,61 @@ export async function GET(request: Request) {
       }).eq('ticker', ticker);
     }
 
-    // --- PART B: PROCESS RECENT GAMES (PAYOUTS) ---
-    // We check "today" (live/recent games) instead of "yesterday"
-    const todayStr = new Date().toISOString().split('T')[0];
-    const scoreRes = await fetch(`${NHL_API_BASE}/score/${todayStr}`);
-    const scoreData = await scoreRes.json();
+    // --- PART B: PROCESS GAMES (Yesterday + Today) ---
+    // We check BOTH days to ensure we don't miss games during the midnight rollover.
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
 
-    for (const game of scoreData.games) {
-        // 1. Check if game is Final
-        if (game.gameState === 'OFF' || game.gameState === 'FINAL') {
-            const gameId = String(game.id);
+    const datesToCheck = [
+        yesterday.toISOString().split('T')[0],
+        today.toISOString().split('T')[0]
+    ];
 
-            // 2. IDEMPOTENCY CHECK: Have we processed this game already?
-            const { data: existing } = await supabase
-                .from('processed_games')
-                .select('game_id')
-                .eq('game_id', gameId)
-                .single();
+    for (const dateStr of datesToCheck) {
+        const scoreRes = await fetch(`${NHL_API_BASE}/score/${dateStr}`);
+        const scoreData = await scoreRes.json();
 
-            if (existing) continue; // Skip if already paid
+        for (const game of scoreData.games) {
+            // 1. Check if game is Final
+            if (game.gameState === 'OFF' || game.gameState === 'FINAL') {
+                const gameId = String(game.id);
 
-            // 3. Determine Winner
-            const home = game.homeTeam;
-            const away = game.awayTeam;
-            let winnerTicker = null;
-            
-            if (home.score > away.score) winnerTicker = home.abbrev;
-            else if (away.score > home.score) winnerTicker = away.abbrev;
-
-            if (winnerTicker) {
-                // 4. Pay Winner
-                const { data: teamData } = await supabase
-                    .from('teams')
-                    .select('id, name')
-                    .eq('ticker', winnerTicker)
-                    .eq('league', 'NHL')
+                // 2. IDEMPOTENCY CHECK: Have we processed this game already?
+                const { data: existing } = await supabase
+                    .from('processed_games')
+                    .select('game_id')
+                    .eq('game_id', gameId)
                     .single();
 
-                if (teamData) {
-                    await supabase.rpc('simulate_win', { p_team_id: teamData.id });
-                    log.push(`Paid out: ${teamData.name} (${winnerTicker})`);
-                }
-            }
+                if (existing) continue; // Skip if already paid
 
-            // 5. MARK AS PROCESSED (Important: Do this even if it was a tie, so we don't re-check)
-            await supabase.from('processed_games').insert({ game_id: gameId, league: 'NHL' });
+                // 3. Determine Winner
+                const home = game.homeTeam;
+                const away = game.awayTeam;
+                let winnerTicker = null;
+                
+                if (home.score > away.score) winnerTicker = home.abbrev;
+                else if (away.score > home.score) winnerTicker = away.abbrev;
+
+                if (winnerTicker) {
+                    // 4. Pay Winner
+                    const { data: teamData } = await supabase
+                        .from('teams')
+                        .select('id, name')
+                        .eq('ticker', winnerTicker)
+                        .eq('league', 'NHL')
+                        .single();
+
+                    if (teamData) {
+                        await supabase.rpc('simulate_win', { p_team_id: teamData.id });
+                        log.push(`Paid out: ${teamData.name} (${winnerTicker})`);
+                    }
+                }
+
+                // 5. MARK AS PROCESSED
+                await supabase.from('processed_games').insert({ game_id: gameId, league: 'NHL' });
+            }
         }
     }
 

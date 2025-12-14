@@ -667,13 +667,14 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             </div>
 
             <div className="flex gap-2">
-                {isTradeDisabled ? (
-                    <button disabled className="flex-1 bg-gray-700 text-gray-500 py-2 rounded-lg text-sm font-bold cursor-not-allowed flex items-center justify-center gap-2">
-                        <Lock size={14} /> Market Closed
-                    </button>
-                ) : (
-                    <button onClick={(e) => { e.stopPropagation(); onTrade(team); }} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-bold transition shadow-md">Trade</button>
-                )}
+                <button 
+            onClick={(e) => { e.stopPropagation(); onTrade(team); }} 
+            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-bold transition shadow-md flex items-center justify-center gap-2"
+        >
+            Trade
+            {/* Show a small lock icon if market is closed, but keep button clickable */}
+            {isTradeDisabled && <Lock size={12} className="text-white/70" />}
+        </button>
                 
                 {onSimWin && (
                     <button onClick={(e) => { e.stopPropagation(); onSimWin(team.id, team.name); }} className="px-3 bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white rounded-lg text-xs uppercase font-bold transition">Sim Win</button>
