@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 
 const NHL_API_BASE = 'https://api-web.nhle.com/v1';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   // 1. SECURITY
   const authHeader = request.headers.get('authorization');
@@ -14,76 +16,54 @@ export async function GET(request: Request) {
     const log = [];
 
     // --- PART A: UPDATE STANDINGS (Wins/Losses) ---
+    // (Keep this existing logic to keep records fresh)
     const standingsRes = await fetch(`${NHL_API_BASE}/standings/now`);
     const standingsData = await standingsRes.json();
 
     for (const teamNode of standingsData.standings) {
       const ticker = teamNode.teamAbbrev.default;
-      const wins = teamNode.wins;
-      const losses = teamNode.losses;
-      const otl = teamNode.otLosses;
-
-      await supabase.from('teams').update({ wins, losses, otl }).eq('ticker', ticker);
+      await supabase.from('teams').update({ 
+          wins: teamNode.wins, 
+          losses: teamNode.losses, 
+          otl: teamNode.otLosses 
+      }).eq('ticker', ticker);
     }
-    log.push('Standings updated.');
 
-    // --- PART B: UPDATE NEXT GAME SCHEDULE ---
-    // We fetch the schedule for "now" which gives us this week's games
-    const scheduleRes = await fetch(`${NHL_API_BASE}/schedule/now`);
-    const scheduleData = await scheduleRes.json();
-    
-    // We need to track which teams we've already found a next game for
-    // so we don't overwrite a Tuesday game with a Thursday game.
-    const teamsUpdated = new Set(); 
-
-    for (const day of scheduleData.gameWeek) {
-        for (const game of day.games) {
-            // Process Home Team
-            const homeTicker = game.homeTeam.abbrev;
-            if (!teamsUpdated.has(homeTicker)) {
-                await supabase.from('teams').update({
-                    next_game_at: game.startTimeUTC,
-                    next_opponent: `@ ${game.awayTeam.abbrev}` // e.g. "@ BOS"
-                }).eq('ticker', homeTicker);
-                teamsUpdated.add(homeTicker);
-            }
-
-            // Process Away Team
-            const awayTicker = game.awayTeam.abbrev;
-            if (!teamsUpdated.has(awayTicker)) {
-                await supabase.from('teams').update({
-                    next_game_at: game.startTimeUTC,
-                    next_opponent: `vs ${game.homeTeam.abbrev}` // e.g. "vs NYR"
-                }).eq('ticker', awayTicker);
-                teamsUpdated.add(awayTicker);
-            }
-        }
-    }
-    log.push('Next games updated.');
-
-    // --- PART C: PROCESS YESTERDAY'S GAMES (PAYOUTS) ---
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toISOString().split('T')[0];
-
-    const scoreRes = await fetch(`${NHL_API_BASE}/score/${dateStr}`);
+    // --- PART B: PROCESS RECENT GAMES (PAYOUTS) ---
+    // We check "today" (live/recent games) instead of "yesterday"
+    const todayStr = new Date().toISOString().split('T')[0];
+    const scoreRes = await fetch(`${NHL_API_BASE}/score/${todayStr}`);
     const scoreData = await scoreRes.json();
 
     for (const game of scoreData.games) {
+        // 1. Check if game is Final
         if (game.gameState === 'OFF' || game.gameState === 'FINAL') {
+            const gameId = String(game.id);
+
+            // 2. IDEMPOTENCY CHECK: Have we processed this game already?
+            const { data: existing } = await supabase
+                .from('processed_games')
+                .select('game_id')
+                .eq('game_id', gameId)
+                .single();
+
+            if (existing) continue; // Skip if already paid
+
+            // 3. Determine Winner
             const home = game.homeTeam;
             const away = game.awayTeam;
-            
             let winnerTicker = null;
+            
             if (home.score > away.score) winnerTicker = home.abbrev;
             else if (away.score > home.score) winnerTicker = away.abbrev;
 
             if (winnerTicker) {
+                // 4. Pay Winner
                 const { data: teamData } = await supabase
                     .from('teams')
                     .select('id, name')
                     .eq('ticker', winnerTicker)
-					.eq('league', 'NHL')
+                    .eq('league', 'NHL')
                     .single();
 
                 if (teamData) {
@@ -91,6 +71,9 @@ export async function GET(request: Request) {
                     log.push(`Paid out: ${teamData.name} (${winnerTicker})`);
                 }
             }
+
+            // 5. MARK AS PROCESSED (Important: Do this even if it was a tie, so we don't re-check)
+            await supabase.from('processed_games').insert({ game_id: gameId, league: 'NHL' });
         }
     }
 
