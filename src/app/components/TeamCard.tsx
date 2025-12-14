@@ -34,7 +34,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       score: string;
       time: string;
       resultColor?: string; // For Final (Green/Red)
-      isClosed: boolean;    // NEW: Explicit closed flag
+      isClosed: boolean;    // Market Closed Flag
   } | null>(null);
 
   // --- MATH ---
@@ -62,15 +62,15 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
       gameDate.getDate() === now.getDate() && 
       gameDate.getMonth() === now.getMonth();
 
-  // Check if game was yesterday (for overnight pending payouts before 4am)
+  // Check if game was yesterday (to handle late games/lock windows)
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const isGameYesterday = gameDate && 
       gameDate.getDate() === yesterday.getDate() && 
       gameDate.getMonth() === yesterday.getMonth();
 
-  // We check status if it's game day OR (game was yesterday AND it's before 4am)
-  const shouldCheckGameStatus = isGameToday || (isGameYesterday && now.getHours() < 4);
+  // We check status if it's game day OR (game was yesterday AND it's before Noon - covering late night games)
+  const shouldCheckGameStatus = isGameToday || (isGameYesterday && now.getHours() < 12);
 
   const getNextGameText = () => {
     if (!gameDate) return 'TBD';
@@ -107,11 +107,6 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             let sport = 'football/nfl';
             if (team.league === 'NHL') sport = 'hockey/nhl';
             
-            // If checking yesterday's game (overnight), we might need yesterday's scoreboard
-            // However, ESPN 'scoreboard' usually shows 'today's' window. 
-            // For safety, if it's early morning, we fetch a range or rely on ESPN defaults (often shows previous day late games).
-            // For MVP simplicity, we hit the standard endpoint which usually covers "current relevant games".
-            
             const scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/scoreboard`;
 
             const res = await fetch(scoreboardUrl);
@@ -129,6 +124,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             if (myGame) {
                 const comp = myGame.competitions[0];
                 const statusState = myGame.status.type.state; // 'pre', 'in', 'post'
+                const gameId = String(myGame.id);
 
                 const myTeamData = comp.competitors.find((c: any) => {
                     const t = c.team.abbreviation;
@@ -137,17 +133,49 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                 const oppTeamData = comp.competitors.find((c: any) => c.id !== myTeamData?.id);
 
                 if (myTeamData && oppTeamData) {
-                    // CASE 1: LIVE GAME -> CLOSED
+                    let isClosed = false;
+
+                    // --- LOCK LOGIC ---
+                    if (statusState === 'in') {
+                        // LIVE: Always Closed
+                        isClosed = true;
+                    } else if (statusState === 'post') {
+                        // FINAL: Check if Payout Logged (Fast Unlock) or Time Buffer (Slow Unlock)
+                        
+                        // 1. Check DB for Payout Log
+                        const { data: processed } = await supabase
+                            .from('processed_games')
+                            .select('game_id')
+                            .eq('game_id', gameId)
+                            .single();
+                        
+                        if (processed) {
+                            // Payout confirmed -> MARKET OPEN
+                            isClosed = false;
+                        } else {
+                            // No Payout yet -> Use Time Buffer Safety
+                            const gameStart = new Date(comp.date);
+                            const now = new Date();
+                            const diffHours = (now.getTime() - gameStart.getTime()) / (1000 * 60 * 60);
+
+                            // NHL: ~2.5h game + 1h buffer = 3.5h | NFL: ~3.5h game + 1h buffer = 4.5h
+                            const lockThreshold = team.league === 'NFL' ? 5.0 : 4.0; 
+
+                            if (diffHours < lockThreshold) {
+                                isClosed = true;
+                            }
+                        }
+                    }
+
+                    // --- SET STATUS ---
                     if (statusState === 'in') {
                         setTodaysGameInfo({
                             status: 'live',
                             score: `${myTeamData.team.abbreviation} ${myTeamData.score}-${oppTeamData.score} ${oppTeamData.team.abbreviation}`,
                             time: comp.status.type.shortDetail, // e.g. "3rd - 2:00"
-                            isClosed: true
+                            isClosed: isClosed
                         });
-                    } 
-                    // CASE 2: FINISHED GAME -> CLOSED (Until Payout)
-                    else if (statusState === 'post') {
+                    } else if (statusState === 'post') {
                         const myScore = parseInt(myTeamData.score);
                         const oppScore = parseInt(oppTeamData.score);
                         const isWin = myScore > oppScore;
@@ -162,7 +190,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
                             score: `${resultChar} ${myScore}-${oppScore} ${vsAt} ${oppTeamData.team.abbreviation}`,
                             time: 'Final',
                             resultColor: colorClass,
-                            isClosed: true
+                            isClosed: isClosed
                         });
                     }
                 }
@@ -376,6 +404,9 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
   const isPositive = changePercent >= 0;
   const isProfit = currentPrice >= avgCost;
   const graphColor = isPositive ? '#4ade80' : '#f87171'; 
+  
+  // Disable trade button if closed
+  const isTradeDisabled = todaysGameInfo?.isClosed;
 
   return (
     <div 
@@ -636,7 +667,14 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId }: 
             </div>
 
             <div className="flex gap-2">
-                <button onClick={(e) => { e.stopPropagation(); onTrade(team); }} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-bold transition shadow-md">Trade</button>
+                {isTradeDisabled ? (
+                    <button disabled className="flex-1 bg-gray-700 text-gray-500 py-2 rounded-lg text-sm font-bold cursor-not-allowed flex items-center justify-center gap-2">
+                        <Lock size={14} /> Market Closed
+                    </button>
+                ) : (
+                    <button onClick={(e) => { e.stopPropagation(); onTrade(team); }} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-bold transition shadow-md">Trade</button>
+                )}
+                
                 {onSimWin && (
                     <button onClick={(e) => { e.stopPropagation(); onSimWin(team.id, team.name); }} className="px-3 bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white rounded-lg text-xs uppercase font-bold transition">Sim Win</button>
                 )}
