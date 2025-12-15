@@ -42,7 +42,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#562171] to-[#CF8035] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#1a0b2e] to-[#432818] flex items-center justify-center p-4">
       <div className="bg-gray-800 border border-gray-700 p-8 rounded-2xl shadow-2xl w-full max-w-md">
         
         {/* LOGO */}

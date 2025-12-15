@@ -210,7 +210,7 @@ export default function Home() {
   const activeLeagues = ['NHL', 'NFL'];
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-[#562171] to-[#CF8035] text-white overflow-hidden">
+    <div className="flex h-screen bg-gradient-to-br from-[#1a0b2e] to-[#432818] text-white overflow-hidden">
       
       {/* SIDEBAR */}
       <aside className="w-20 bg-white border-r border-gray-200 flex flex-col items-center py-6 gap-8 z-20 justify-between shadow-xl">
@@ -259,22 +259,45 @@ export default function Home() {
             <p className="text-sm text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">Select a league</p>
         </div>
         <div className="p-4 space-y-2">
-            {['NHL', 'NFL'].map((league) => (
-                <button
-                    key={league}
-                    onClick={() => setSelectedLeague(league as any)}
-                    disabled={!activeLeagues.includes(league)}
-                    className={`w-full h-12 rounded-lg font-bold flex items-center justify-center group-hover:justify-start group-hover:px-4 transition-all ${
-                        selectedLeague === league 
-                        ? 'bg-[#562171] text-white shadow-md' // Active Purple
-                        : activeLeagues.includes(league)
-                            ? 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-[#562171]'
-                            : 'bg-transparent text-gray-300 cursor-not-allowed'
-                    }`}
-                >
-                    {/* ... keep internal logo/text code the same ... */}
-                </button>
-            ))}
+        {['NHL', 'NFL'].map((league) => (
+                    <button
+                        key={league}
+                        onClick={() => setSelectedLeague(league as any)}
+                        disabled={!activeLeagues.includes(league)}
+                        className={`w-full h-12 rounded-lg font-bold flex items-center justify-center group-hover:justify-start group-hover:px-4 transition-all ${
+                            selectedLeague === league 
+                            ? 'bg-[#562171] text-white shadow-md' 
+                            : activeLeagues.includes(league)
+                                ? 'bg-gray-50 text-gray-800 hover:bg-gray-100 hover:text-[#562171]'
+                                : 'bg-transparent text-gray-300 cursor-not-allowed'
+                        }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            {/* NHL LOGO */}
+                            {league === 'NHL' && (
+                                <img 
+                                    src="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg" 
+                                    alt="NHL" 
+                                    // FIX: Use brightness-0 to turn the white logo black when inactive
+                                    className={`h-6 w-6 object-contain flex-shrink-0 transition-all ${selectedLeague === league ? '' : 'brightness-0 opacity-70'}`} 
+                                />
+                            )}
+                            {/* NFL LOGO */}
+                            {league === 'NFL' && (
+                                <img 
+                                    src="https://upload.wikimedia.org/wikipedia/en/a/a2/National_Football_League_logo.svg" 
+                                    alt="NFL" 
+                                    className="h-6 w-6 object-contain flex-shrink-0" 
+                                />
+                            )}
+                            
+                            {/* TEXT */}
+                            <span className="opacity-0 w-0 group-hover:w-auto group-hover:opacity-100 overflow-hidden whitespace-nowrap transition-all duration-300">
+                                {league}
+                            </span>
+                        </div>
+                    </button>
+                ))}
         </div>
     </aside>
       )}

@@ -367,7 +367,7 @@ const handleViewHolders = async (e: React.MouseEvent) => {
         .from('transactions')
         .select('created_at, share_price')
         .eq('team_id', team.id)
-		.neq('type', 'DIVIDEND')
+        .neq('type', 'DIVIDEND')
         .order('created_at', { ascending: true })
         .limit(50);
       
@@ -448,14 +448,14 @@ const handleViewHolders = async (e: React.MouseEvent) => {
 
   return (
     <div 
-      className={`bg-gray-800 rounded-xl border border-gray-700 transition-all duration-300 shadow-lg relative ${isExpanded ? 'ring-2 ring-blue-500/50' : 'hover:border-blue-500'}`}
+      className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300 shadow-lg relative ${isExpanded ? 'ring-1 ring-white/30' : 'hover:border-white/30'}`}
     >
       <div className="h-1.5 w-full rounded-t-xl" style={{ backgroundColor: team.color || '#374151' }}></div>
 
       {/* --- HEADER --- */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="p-4 cursor-pointer bg-gray-800 hover:bg-gray-800/80 transition rounded-b-xl"
+        className="p-4 cursor-pointer bg-transparent hover:bg-white/5 transition rounded-b-xl"
       >
         <div className="flex justify-between items-start mb-3">
              <div className="flex items-start gap-3 w-full">
