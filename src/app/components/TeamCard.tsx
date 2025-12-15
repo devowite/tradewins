@@ -29,6 +29,7 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId, is
   const [showNext5, setShowNext5] = useState(false);
   const [next5Games, setNext5Games] = useState<any[]>([]);
   const [loadingNext5, setLoadingNext5] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   // --- GAME STATUS STATE (Live or Final) ---
   const [todaysGameInfo, setTodaysGameInfo] = useState<{
@@ -43,6 +44,13 @@ export default function TeamCard({ team, myShares, onTrade, onSimWin, userId, is
 const [showHolders, setShowHolders] = useState(false);
 const [holders, setHolders] = useState<any[]>([]);
 const [loadingHolders, setLoadingHolders] = useState(false);
+
+
+const handleScheduleHover = () => {
+    setShowSchedule(true);
+    handleLast5Hover();
+    handleNext5Hover();
+};
 
 const handleViewHolders = async (e: React.MouseEvent) => {
   e.stopPropagation();
@@ -447,9 +455,7 @@ const handleViewHolders = async (e: React.MouseEvent) => {
   const isTradeDisabled = todaysGameInfo?.isClosed;
 
   return (
-    <div 
-      className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300 shadow-lg relative ${isExpanded ? 'ring-1 ring-white/30' : 'hover:border-white/30'}`}
-    >
+    <div className={`bg-black/20 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] relative ${isExpanded ? 'ring-1 ring-white/20' : 'hover:border-white/20 hover:bg-black/30'}`}>
       <div className="h-1.5 w-full rounded-t-xl" style={{ backgroundColor: team.color || '#374151' }}></div>
 
       {/* --- HEADER --- */}
@@ -521,79 +527,57 @@ const handleViewHolders = async (e: React.MouseEvent) => {
                             </div>
                         )}
 
-                        {/* --- LAST 5 HOVER --- */}
-                        <div 
-                            className="relative group ml-auto sm:ml-0 z-50"
-                            onMouseEnter={handleLast5Hover}
-                            onMouseLeave={() => setShowLast5(false)}
-                        >
-                            <span className="flex items-center gap-1 text-[9px] font-bold text-gray-500 bg-gray-900/50 px-1.5 py-0.5 rounded cursor-help hover:text-gray-300 transition border border-transparent hover:border-gray-700">
-                                <History size={10} /> Last 5
-                            </span>
+                        {/* --- SCHEDULE HOVER (Consolidated) --- */}
+<div 
+    className="relative group ml-auto sm:ml-0 z-50"
+    onMouseEnter={handleScheduleHover}
+    onMouseLeave={() => setShowSchedule(false)}
+>
+    <span className="flex items-center gap-1 text-[9px] font-bold text-gray-400 hover:text-white transition cursor-help px-1.5 py-0.5">
+        <CalendarDays size={12} /> Schedule
+    </span>
 
-                            {showLast5 && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
-                                    <div className="bg-black/50 px-2 py-1.5 border-b border-gray-700 text-[10px] text-gray-300 font-bold text-center uppercase tracking-wider">
-                                        Recent Form
-                                    </div>
-                                    <div className="p-1 space-y-0.5">
-                                        {loadingLast5 ? (
-                                            <p className="text-[9px] text-gray-500 text-center py-2 animate-pulse">Loading...</p>
-                                        ) : last5Games.length > 0 ? (
-                                            last5Games.map((g, i) => (
-                                                <div key={i} className="flex items-center text-[10px] px-2 py-1 rounded hover:bg-gray-800 transition">
-                                                    <span className="text-gray-400 w-12 font-bold whitespace-nowrap">vs {g.opp}</span>
-                                                    <span className="text-gray-500 font-mono text-[9px] flex-1 text-center">{g.score}</span>
-                                                    <span className={`font-bold w-4 text-right ${
-                                                        g.result === 'W' ? 'text-green-400' : 'text-red-400'
-                                                    }`}>
-                                                        {g.result}
-                                                    </span>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-[9px] text-gray-500 text-center py-2">No recent games</p>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+    {showSchedule && (
+        <div className="absolute bottom-full right-0 sm:left-1/2 sm:-translate-x-1/2 mb-2 w-[340px] bg-gray-950/95 border border-white/10 rounded-lg shadow-2xl z-[100] overflow-hidden flex backdrop-blur-xl">
+            {/* LEFT COL: LAST 5 */}
+            <div className="flex-1 border-r border-white/10">
+                <div className="bg-white/5 px-2 py-1.5 border-b border-white/10 text-[9px] text-gray-400 font-bold text-center uppercase">
+                    Last 5
+                </div>
+                <div className="p-1 space-y-0.5">
+                    {loadingLast5 ? (
+                        <p className="text-[9px] text-gray-600 text-center py-2">Loading...</p>
+                    ) : last5Games.map((g, i) => (
+                        <div key={i} className="flex justify-between items-center text-[10px] px-2 py-1 rounded hover:bg-white/5">
+                            <span className="text-gray-400 font-bold">{g.opp}</span>
+                            <div className="flex gap-2">
+                                <span className="text-gray-500 font-mono">{g.score}</span>
+                                <span className={g.result === 'W' ? 'text-green-400' : 'text-red-400'}>{g.result}</span>
+                            </div>
                         </div>
+                    ))}
+                </div>
+            </div>
 
-                        {/* --- NEXT 5 HOVER --- */}
-                        <div 
-                            className="relative group ml-1 z-50"
-                            onMouseEnter={handleNext5Hover}
-                            onMouseLeave={() => setShowNext5(false)}
-                        >
-                            <span className="flex items-center gap-1 text-[9px] font-bold text-blue-400/70 bg-blue-900/10 px-1.5 py-0.5 rounded cursor-help hover:text-blue-300 transition border border-transparent hover:border-blue-900/30">
-                                <CalendarDays size={10} /> Next 5
-                            </span>
-
-                            {showNext5 && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 border border-gray-600 rounded-lg shadow-2xl z-[100] overflow-hidden">
-                                    <div className="bg-black/50 px-2 py-1.5 border-b border-gray-700 text-[10px] text-blue-300 font-bold text-center uppercase tracking-wider">
-                                        Upcoming Schedule
-                                    </div>
-                                    <div className="p-1 space-y-0.5">
-                                        {loadingNext5 ? (
-                                            <p className="text-[9px] text-gray-500 text-center py-2 animate-pulse">Loading...</p>
-                                        ) : next5Games.length > 0 ? (
-                                            next5Games.map((g, i) => (
-                                                <div key={i} className="flex items-center text-[10px] px-2 py-1 rounded hover:bg-gray-800 transition">
-                                                    <span className="text-gray-400 w-12 font-bold whitespace-nowrap">vs {g.opp}</span>
-                                                    <span className="text-gray-500 font-mono text-[9px] flex-1 text-center">{g.date}</span>
-                                                    <span className="font-bold text-gray-300 w-12 text-right whitespace-nowrap">
-                                                        {g.record}
-                                                    </span>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-[9px] text-gray-500 text-center py-2">No upcoming games</p>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+            {/* RIGHT COL: NEXT 5 */}
+            <div className="flex-1">
+                <div className="bg-white/5 px-2 py-1.5 border-b border-white/10 text-[9px] text-blue-300 font-bold text-center uppercase">
+                    Upcoming
+                </div>
+                <div className="p-1 space-y-0.5">
+                    {loadingNext5 ? (
+                        <p className="text-[9px] text-gray-600 text-center py-2">Loading...</p>
+                    ) : next5Games.map((g, i) => (
+                        <div key={i} className="flex justify-between items-center text-[10px] px-2 py-1 rounded hover:bg-white/5">
+                            <span className="text-gray-300 font-bold">{g.opp}</span>
+                            <span className="text-gray-500 font-mono">{g.date}</span>
                         </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    )}
+</div>
 
                     </div>
                 </div>

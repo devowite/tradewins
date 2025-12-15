@@ -269,14 +269,17 @@ export default function Home() {
                         key={league}
                         onClick={() => setSelectedLeague(league as any)}
                         disabled={!activeLeagues.includes(league)}
-                        className={`w-full h-12 rounded-lg font-bold flex items-center justify-center group-hover:justify-start group-hover:px-4 transition-all ${
+                        className={`w-full h-12 flex items-center justify-center group-hover:justify-start group-hover:px-6 transition-all relative ${
                             selectedLeague === league 
-                            ? 'bg-[#562171] text-white shadow-md' // Brand Purple Active
+                            ? 'text-white bg-white/5' // Slight BG highlight
                             : activeLeagues.includes(league)
-                                ? 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
-                                : 'bg-transparent text-gray-600 cursor-not-allowed'
+                                ? 'text-gray-500 hover:text-white hover:bg-white/5'
+                                : 'text-gray-700 cursor-not-allowed'
                         }`}
                     >
+                        {selectedLeague === league && (
+    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#562171] shadow-[0_0_10px_#562171] rounded-r-full"></div>
+)}
                         <div className="flex items-center gap-3">
                             {/* NHL LOGO (No filter needed for dark mode) */}
                             {league === 'NHL' && (

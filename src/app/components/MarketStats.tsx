@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, DollarSign, BarChart3, Trophy, HelpCircle, ArrowRightLeft } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 
 interface MarketStatsProps {
   marketCap: number;
@@ -12,71 +12,79 @@ interface MarketStatsProps {
 
 export default function MarketStats({ marketCap, volume24hShares, volume24hDollars, avgYield, totalBank }: MarketStatsProps) {
   
-  // Helper to render a stat card
-  const StatCard = ({ icon: Icon, label, value, subtext, color, tooltip }: any) => (
-    <div className="bg-black/40 border border-white/10 p-4 rounded-xl flex flex-col gap-1 backdrop-blur-md relative group cursor-help transition hover:border-white/20">
+  // Helper to render a clean stat item
+  const StatItem = ({ label, value, subtext, color, isPrimary, tooltip }: any) => (
+    <div className={`flex flex-col justify-center px-4 relative group cursor-help ${isPrimary ? 'items-start min-w-[180px]' : 'items-start min-w-[140px]'}`}>
       
-      {/* Label Row */}
-      <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">
-        <Icon size={14} /> 
+      {/* Label */}
+      <div className="flex items-center gap-1.5 text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">
         {label}
-        <HelpCircle size={10} className="text-gray-600 group-hover:text-gray-400 transition" />
+        <HelpCircle size={10} className="text-gray-700 group-hover:text-gray-500 transition" />
       </div>
 
-      {/* Value Row */}
-      <div className={`text-xl xl:text-2xl font-mono font-bold ${color}`}>
-        {value} {subtext && <span className="text-sm text-gray-500 font-sans font-normal">{subtext}</span>}
+      {/* Value (Primary is HUGE, Secondary is Normal) */}
+      <div className={`font-mono font-bold leading-none ${isPrimary ? `text-3xl ${color || 'text-white'}` : `text-xl text-gray-300`}`}>
+        {value} <span className="text-sm text-gray-600 font-sans font-normal ml-1">{subtext}</span>
       </div>
 
       {/* Tooltip Popup */}
-      <div className="hidden group-hover:block absolute top-full left-0 mt-2 w-48 p-3 bg-black border border-gray-700 rounded-lg shadow-xl text-xs text-gray-300 z-50 pointer-events-none">
+      <div className="hidden group-hover:block absolute top-full left-0 mt-2 w-48 p-3 bg-gray-950 border border-white/10 rounded-lg shadow-xl text-xs text-gray-400 z-50 pointer-events-none">
         {tooltip}
       </div>
     </div>
   );
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+    <div className="flex flex-wrap items-center gap-y-6 bg-black/20 backdrop-blur-sm rounded-2xl border border-white/5 p-6 mb-10 shadow-lg justify-between">
       
-      <StatCard 
-        icon={DollarSign} 
+      {/* 1. Market Cap (Primary) */}
+      <StatItem 
         label="Market Cap" 
         value={`$${marketCap.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
         color="text-white"
+        isPrimary={true} 
         tooltip="The total dollar value of all shares currently owned by players."
       />
 
-      <StatCard 
-        icon={Activity} 
-        label="24h Volume" 
-        value={volume24hShares.toLocaleString()}
-        subtext="shares"
-        color="text-blue-400"
-        tooltip="Total number of shares bought or sold in the last 24 hours."
-      />
+      {/* Vertical Divider */}
+      <div className="w-px h-10 bg-white/10 hidden md:block"></div>
 
-      <StatCard 
-        icon={ArrowRightLeft} 
-        label="24h Value" 
-        value={`$${volume24hDollars.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
-        color="text-blue-300"
-        tooltip="Total USD value of all trades executed in the last 24 hours."
-      />
-
-      <StatCard 
-        icon={BarChart3} 
-        label="Avg. Dividend" 
-        value={`$${avgYield.toFixed(2)}`}
-        color="text-green-400"
-        tooltip="The weighted average payout per share across the entire market based on current supply."
-      />
-
-      <StatCard 
-        icon={Trophy} 
+      {/* 2. Total Dividend Pot (Primary) */}
+      <StatItem 
         label="Total Dividend Pot" 
         value={`$${totalBank.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
         color="text-yellow-400"
+        isPrimary={true} 
         tooltip="Total sum of all outstanding dividends, waiting to be paid out to winners."
+      />
+
+      <div className="w-px h-10 bg-white/10 hidden md:block"></div>
+
+      {/* 3. Volume Shares */}
+      <StatItem 
+        label="24h Volume" 
+        value={volume24hShares.toLocaleString()}
+        subtext="shares"
+        tooltip="Total number of shares bought or sold in the last 24 hours."
+      />
+
+      <div className="w-px h-10 bg-white/10 hidden md:block"></div>
+
+      {/* 4. Volume Dollars */}
+      <StatItem 
+        label="24h Value" 
+        value={`$${volume24hDollars.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+        tooltip="Total USD value of all trades executed in the last 24 hours."
+      />
+
+      <div className="w-px h-10 bg-white/10 hidden md:block"></div>
+
+      {/* 5. Avg Yield */}
+      <StatItem 
+        label="Avg. Yield" 
+        value={`$${avgYield.toFixed(2)}`}
+        color="text-green-400"
+        tooltip="The weighted average payout per share across the entire market."
       />
 
     </div>
