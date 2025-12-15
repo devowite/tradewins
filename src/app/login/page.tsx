@@ -25,7 +25,7 @@ export default function Login() {
       if (error) alert(error.message);
       else {
         alert('Account created! You are logged in.');
-        router.push('/'); // Redirect to Dashboard
+        router.push('/dashboard');
       }
     } else {
       // LOG IN
@@ -35,7 +35,7 @@ export default function Login() {
       });
       if (error) alert(error.message);
       else {
-        router.push('/'); // Redirect to Dashboard
+        router.push('/dashboard');
       }
     }
     setLoading(false);
@@ -54,7 +54,7 @@ export default function Login() {
                     className="h-full w-full object-contain drop-shadow-lg" 
                 />
             </div>
-            <h1 className="text-2xl font-bold text-white">Welcome to Tradium</h1>
+            <h1 className="text-2xl font-bold text-white">Welcome to TradeWins</h1>
             <p className="text-gray-400 text-sm">The Live Sports Stock Market</p>
         </div>
 

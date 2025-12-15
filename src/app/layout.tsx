@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tradium",
+  title: "TradeWins",
   description: "The Sports Exchange",
 };
 
