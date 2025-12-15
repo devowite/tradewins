@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation'; 
 import { LayoutGrid, Briefcase, User, Trophy, CircleDollarSign, ArrowUpDown, LogOut, Shield } from 'lucide-react';
-import TeamCard from './components/TeamCard';
-import TradeModal from './components/TradeModal';
-import MarketStats from './components/MarketStats';
-import Portfolio from './components/Portfolio';
-import Profile from './components/Profile';
-import WalletModal from './components/WalletModal';
+
+// FIX: Updated imports to point to the parent directory (../)
+import TeamCard from '../components/TeamCard';
+import TradeModal from '../components/TradeModal';
+import MarketStats from '../components/MarketStats';
+import Portfolio from '../components/Portfolio';
+import Profile from '../components/Profile';
+import WalletModal from '../components/WalletModal';
 
 export default function Home() {
   const router = useRouter();
