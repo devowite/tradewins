@@ -455,7 +455,7 @@ const handleViewHolders = async (e: React.MouseEvent) => {
   const isTradeDisabled = todaysGameInfo?.isClosed;
 
   return (
-    <div className={`bg-black/20 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] relative ${isExpanded ? 'ring-1 ring-white/20' : 'hover:border-white/20 hover:bg-black/30'}`}>
+    <div className={`bg-black/20 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] relative hover:z-50 ${isExpanded ? 'ring-1 ring-white/20' : 'hover:border-white/20 hover:bg-black/30'}`}>
       <div className="h-1.5 w-full rounded-t-xl" style={{ backgroundColor: team.color || '#374151' }}></div>
 
       {/* --- HEADER --- */}

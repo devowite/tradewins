@@ -32,18 +32,18 @@ export default function LandingPage() {
       {/* HERO SECTION */}
       <main className="flex-1 flex flex-col items-center justify-center text-center px-4 mt-10 mb-20">
         <div className="bg-white/5 backdrop-blur-xl border border-white/10 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest text-blue-300 mb-6 shadow-xl">
-            The Future of Sports Betting
+            Better Than Traditional Sports Betting
         </div>
         
         <h1 className="text-5xl md:text-7xl font-extrabold mb-6 leading-tight max-w-4xl tracking-tight">
-            Don't Just Bet. <br/>
+            Don't Bet on a Game. <br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-                Invest in the Game.
+                Invest in the Team.
             </span>
         </h1>
         
         <p className="text-lg md:text-xl text-gray-400 max-w-2xl mb-10 leading-relaxed">
-            TradeWins is the first live sports stock market. Buy shares in your favorite NFL & NHL teams, earn dividends when they win, and trade your way to the top.
+            TradeWins is the first live sports stock market. Buy shares in your favorite teams, earn dividends when they win, and trade your way to the top.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">

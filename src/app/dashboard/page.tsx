@@ -451,11 +451,14 @@ export default function Home() {
             onSuccess={reloadData}
         />
       )}
-      {/* TUTORIAL MODAL */}
-      <TutorialModal 
-        isOpen={isTutorialOpen} 
-        onClose={() => setIsTutorialOpen(false)} 
-      />
+     {/* TUTORIAL MODAL */}
+      {/* FIX: Wrap in conditional {isTutorialOpen && ...} to force reset on close */}
+      {isTutorialOpen && (
+        <TutorialModal 
+            isOpen={isTutorialOpen} 
+            onClose={() => setIsTutorialOpen(false)} 
+        />
+      )}
     </div>
   );
 }
