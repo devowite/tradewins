@@ -1,5 +1,7 @@
 'use client';
 
+import { BookOpen } from 'lucide-react'; // New Icon
+import TutorialModal from '../components/TutorialModal'; // Import Component
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation'; 
@@ -23,6 +25,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
   const [isWalletOpen, setIsWalletOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
 
   // Market Stats State
   const [marketStats, setMarketStats] = useState({
@@ -236,6 +239,14 @@ export default function Home() {
                 <button onClick={() => setActiveTab('PROFILE')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'PROFILE' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
                     <User size={24} /> <span className="text-[10px] font-bold">Profile</span>
                 </button>
+
+                {/* TUTORIAL BUTTON */}
+                <button 
+                    onClick={() => setIsTutorialOpen(true)}
+                    className="p-3 rounded-xl flex flex-col items-center gap-1 transition text-blue-400 hover:text-white hover:bg-blue-500/10 mt-2"
+                >
+                    <BookOpen size={24} /> <span className="text-[10px] font-bold text-center leading-tight">How to<br/>Play</span>
+                </button>
                 
                 {/* ADMIN BUTTON */}
                 {user?.is_admin && (
@@ -440,6 +451,11 @@ export default function Home() {
             onSuccess={reloadData}
         />
       )}
+      {/* TUTORIAL MODAL */}
+      <TutorialModal 
+        isOpen={isTutorialOpen} 
+        onClose={() => setIsTutorialOpen(false)} 
+      />
     </div>
   );
 }
