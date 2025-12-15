@@ -116,7 +116,7 @@ export default function AdminPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#562171] to-[#CF8035] text-white p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800">
         <div className="flex items-center gap-3">

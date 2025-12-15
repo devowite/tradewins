@@ -210,93 +210,73 @@ export default function Home() {
   const activeLeagues = ['NHL', 'NFL'];
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
+    <div className="flex h-screen bg-gradient-to-br from-[#562171] to-[#CF8035] text-white overflow-hidden">
       
       {/* SIDEBAR */}
-      <aside className="w-20 bg-gray-950 border-r border-gray-800 flex flex-col items-center py-6 gap-8 z-20 justify-between">
-        <div className="flex flex-col items-center gap-8 w-full">
-            {/* APP LOGO */}
-            <div className="h-12 w-12 flex items-center justify-center">
-                <img 
-                    src="/logo.png" 
-                    alt="Tradium" 
-                    className="h-full w-full object-contain" 
-                />
-            </div>
-            <nav className="flex flex-col gap-6 w-full px-2">
-                <button onClick={() => setActiveTab('MARKETS')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'MARKETS' ? 'bg-gray-800 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                    <LayoutGrid size={24} /> <span className="text-[10px] font-bold">Markets</span>
-                </button>
-                <button onClick={() => setActiveTab('PORTFOLIO')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'PORTFOLIO' ? 'bg-gray-800 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                    <Briefcase size={24} /> <span className="text-[10px] font-bold">Portfolio</span>
-                </button>
-                <button onClick={() => setActiveTab('PROFILE')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'PROFILE' ? 'bg-gray-800 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                    <User size={24} /> <span className="text-[10px] font-bold">Profile</span>
-                </button>
-                {user?.is_admin && (
-                    <button 
-                        onClick={() => router.push('/admin')}
-                        className="p-3 rounded-xl flex flex-col items-center gap-1 transition bg-red-900/20 text-red-400 hover:bg-red-900/40 hover:text-white mt-4 border border-red-900/50"
-                    >
-                        <Shield size={24} /> <span className="text-[10px] font-bold">Admin</span>
-                    </button>
-                )}
-            </nav>
+      <aside className="w-20 bg-white border-r border-gray-200 flex flex-col items-center py-6 gap-8 z-20 justify-between shadow-xl">
+    <div className="flex flex-col items-center gap-8 w-full">
+        {/* LOGO AREA */}
+        <div className="h-12 w-12 flex items-center justify-center">
+            <img src="/logo.png" alt="Tradium" className="h-full w-full object-contain" />
         </div>
-        <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-red-400 transition group" title="Sign Out">
-            <div className="p-2 rounded-lg group-hover:bg-red-900/20 transition"><LogOut size={20} /></div>
-            <span className="text-[9px] font-bold uppercase tracking-wide">Logout</span>
-        </button>
-      </aside>
+        
+        <nav className="flex flex-col gap-6 w-full px-2">
+            {/* BUTTONS: Note the text color changes for the white background */}
+            <button onClick={() => setActiveTab('MARKETS')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'MARKETS' ? 'bg-[#562171]/10 text-[#562171]' : 'text-gray-400 hover:text-[#562171] hover:bg-gray-50'}`}>
+                <LayoutGrid size={24} /> <span className="text-[10px] font-bold">Markets</span>
+            </button>
+            <button onClick={() => setActiveTab('PORTFOLIO')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'PORTFOLIO' ? 'bg-[#562171]/10 text-[#562171]' : 'text-gray-400 hover:text-[#562171] hover:bg-gray-50'}`}>
+                <Briefcase size={24} /> <span className="text-[10px] font-bold">Portfolio</span>
+            </button>
+            <button onClick={() => setActiveTab('PROFILE')} className={`p-3 rounded-xl flex flex-col items-center gap-1 transition ${activeTab === 'PROFILE' ? 'bg-[#562171]/10 text-[#562171]' : 'text-gray-400 hover:text-[#562171] hover:bg-gray-50'}`}>
+                <User size={24} /> <span className="text-[10px] font-bold">Profile</span>
+            </button>
+            
+            {/* ADMIN BUTTON */}
+            {user?.is_admin && (
+                <button 
+                    onClick={() => router.push('/admin')}
+                    className="p-3 rounded-xl flex flex-col items-center gap-1 transition bg-red-50 text-red-500 hover:bg-red-100 mt-4 border border-red-100"
+                >
+                    <Shield size={24} /> <span className="text-[10px] font-bold">Admin</span>
+                </button>
+            )}
+        </nav>
+    </div>
+    
+    {/* LOGOUT */}
+    <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-2 text-gray-400 hover:text-red-500 transition group">
+        <div className="p-2 rounded-lg group-hover:bg-red-50 transition"><LogOut size={20} /></div>
+        <span className="text-[9px] font-bold uppercase tracking-wide">Logout</span>
+    </button>
+</aside>
 
       {/* MARKETS SUB-SIDEBAR (Collapsible) */}
       {activeTab === 'MARKETS' && (
-        <aside className="w-20 hover:w-64 transition-all duration-300 ease-in-out bg-gray-900 border-r border-gray-800 flex flex-col z-10 group overflow-hidden">
-            <div className="p-6 border-b border-gray-800 whitespace-nowrap flex flex-col justify-center h-24">
-                <h2 className="text-xl font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">Markets</h2>
-                <p className="text-sm text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">Select a league</p>
-            </div>
-            <div className="p-4 space-y-2">
-                {['NHL', 'NFL'].map((league) => (
-                    <button
-                        key={league}
-                        onClick={() => setSelectedLeague(league as any)}
-                        disabled={!activeLeagues.includes(league)}
-                        className={`w-full h-12 rounded-lg font-bold flex items-center justify-center group-hover:justify-start group-hover:px-4 transition-all ${
-                            selectedLeague === league 
-                            ? 'bg-blue-600 text-white shadow-md' 
-                            : activeLeagues.includes(league)
-                                ? 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-                                : 'bg-transparent text-gray-700 cursor-not-allowed'
-                        }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            {/* NHL LOGO */}
-                            {league === 'NHL' && (
-                                <img 
-                                    src="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg" 
-                                    alt="NHL" 
-                                    className="h-6 w-6 object-contain flex-shrink-0" 
-                                />
-                            )}
-                            {/* NFL LOGO */}
-                            {league === 'NFL' && (
-                                <img 
-                                    src="https://upload.wikimedia.org/wikipedia/en/a/a2/National_Football_League_logo.svg" 
-                                    alt="NFL" 
-                                    className="h-6 w-6 object-contain flex-shrink-0" 
-                                />
-                            )}
-                            
-                            {/* TEXT (Hidden when collapsed) */}
-                            <span className="opacity-0 w-0 group-hover:w-auto group-hover:opacity-100 overflow-hidden whitespace-nowrap transition-all duration-300">
-                                {league}
-                            </span>
-                        </div>
-                    </button>
-                ))}
-            </div>
-        </aside>
+        <aside className="w-20 hover:w-64 transition-all duration-300 ease-in-out bg-white/95 backdrop-blur border-r border-gray-200 flex flex-col z-10 group overflow-hidden shadow-lg">
+        <div className="p-6 border-b border-gray-100 whitespace-nowrap flex flex-col justify-center h-24">
+            <h2 className="text-xl font-bold text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">Markets</h2>
+            <p className="text-sm text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">Select a league</p>
+        </div>
+        <div className="p-4 space-y-2">
+            {['NHL', 'NFL'].map((league) => (
+                <button
+                    key={league}
+                    onClick={() => setSelectedLeague(league as any)}
+                    disabled={!activeLeagues.includes(league)}
+                    className={`w-full h-12 rounded-lg font-bold flex items-center justify-center group-hover:justify-start group-hover:px-4 transition-all ${
+                        selectedLeague === league 
+                        ? 'bg-[#562171] text-white shadow-md' // Active Purple
+                        : activeLeagues.includes(league)
+                            ? 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-[#562171]'
+                            : 'bg-transparent text-gray-300 cursor-not-allowed'
+                    }`}
+                >
+                    {/* ... keep internal logo/text code the same ... */}
+                </button>
+            ))}
+        </div>
+    </aside>
       )}
 
       {/* MAIN CONTENT */}
