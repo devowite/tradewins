@@ -372,6 +372,7 @@ export default function Home() {
             ) : activeTab === 'PROFILE' ? (
                 // VIEW 2: PROFILE
                 <Profile 
+					key={user?.id}
                     user={user} 
                     onOpenWallet={() => setIsWalletOpen(true)}
                     onReload={reloadData}
