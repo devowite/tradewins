@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { LayoutGrid, Briefcase, User, Trophy, CircleDollarSign, ArrowUpDown, LogOut, Shield } from 'lucide-react';
 import MarketTicker from '../components/MarketTicker';
 import { toast } from 'sonner';
+import SkeletonCard from '../components/SkeletonCard';
 
 // FIX: Updated imports to point to the parent directory (../)
 import TeamCard from '../components/TeamCard';
@@ -384,7 +385,26 @@ export default function Home() {
                 />
             ) : activeTab === 'MARKETS' ? (
                 // VIEW 3: MARKETS
-                loading ? <p>Loading Data...</p> : (
+                loading ? 
+				// --- SKELETON GRID ---
+                <div className="space-y-6">
+                    {/* Fake Stats Bar */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                        {[...Array(5)].map((_, i) => (
+                            <div key={i} className="h-20 bg-black/20 border border-white/5 rounded-xl animate-pulse"></div>
+                        ))}
+                    </div>
+                    {/* Fake Ticker */}
+                    <div className="h-10 bg-black/20 border-y border-white/5 mb-6 animate-pulse"></div>
+                    
+                    {/* Fake Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[...Array(9)].map((_, i) => (
+                            <SkeletonCard key={i} />
+                        ))}
+                    </div>
+                </div>
+            ) : (
                     <div className="space-y-6">
                         <MarketStats 
                             marketCap={marketStats.marketCap}

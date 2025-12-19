@@ -104,20 +104,39 @@ export async function GET(request: Request) {
           }).eq('ticker', awayTicker).eq('league', 'NFL');
       }
 
-      // --- 2. UPDATE RECORDS --- 
+// --- 2. UPDATE RECORDS & STREAKS ---
       for (const competitor of competition.competitors) {
         let ticker = competitor.team.abbreviation;
         if (TICKER_MAP[ticker]) ticker = TICKER_MAP[ticker];
 
+        const updateData: any = {};
+
+        // A. Get W-L Record
         const recordObj = competitor.records?.find((r: any) => r.name === 'overall');
-        const recordString = recordObj ? recordObj.summary : '0-0-0';
-        const parts = recordString.split('-');
-        
-        await supabaseAdmin.from('teams').update({ 
-            wins: parseInt(parts[0])||0, 
-            losses: parseInt(parts[1])||0, 
-            otl: parseInt(parts[2])||0 
-        }).eq('ticker', ticker).eq('league', 'NFL');
+        if (recordObj) {
+            // Check if record is "10-2" (no OTL) or "10-2-0"
+            const summary = recordObj.summary || '0-0';
+            const parts = summary.split('-');
+            
+            updateData.wins = parseInt(parts[0]) || 0;
+            updateData.losses = parseInt(parts[1]) || 0;
+            if (parts.length > 2) updateData.otl = parseInt(parts[2]) || 0;
+        }
+
+        // B. Get Streak (THE MISSING PART)
+        if (competitor.streak) {
+             const sObj = competitor.streak;
+             const letter = sObj.type === 'win' ? 'W' : (sObj.type === 'loss' ? 'L' : 'T');
+             updateData.streak = `${letter}${sObj.value}`;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+            await supabaseAdmin
+                .from('teams')
+                .update(updateData)
+                .eq('ticker', ticker)
+                .eq('league', 'NFL');
+        }
       }
 
       // --- 3. UPDATE SCHEDULE (Future Games) ---
