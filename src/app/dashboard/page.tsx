@@ -1,19 +1,18 @@
 'use client';
 
-import { BookOpen } from 'lucide-react'; // New Icon
-import TutorialModal from '../components/TutorialModal'; // Import Component
+import { BookOpen } from 'lucide-react'; 
+import TutorialModal from '../components/TutorialModal'; 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation'; 
-import { LayoutGrid, Briefcase, User, Trophy, CircleDollarSign, ArrowUpDown, LogOut, Shield } from 'lucide-react';
-import MarketTicker from '../components/MarketTicker';
+import { LayoutGrid, Briefcase, User, CircleDollarSign, ArrowUpDown, LogOut, Shield } from 'lucide-react';
 import { toast } from 'sonner';
-import SkeletonCard from '../components/SkeletonCard';
 
-// FIX: Updated imports to point to the parent directory (../)
 import TeamCard from '../components/TeamCard';
+import SkeletonCard from '../components/SkeletonCard'; // Ensure this is imported
 import TradeModal from '../components/TradeModal';
 import MarketStats from '../components/MarketStats';
+import MarketTicker from '../components/MarketTicker';
 import Portfolio from '../components/Portfolio';
 import Profile from '../components/Profile';
 import WalletModal from '../components/WalletModal';
@@ -111,7 +110,7 @@ export default function Home() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     
-    // Create a list of IDs for the current league (e.g., all NFL team IDs)
+    // Create a list of IDs for the current league
     const teamIds = leagueTeams.map(t => t.id);
     
     if (teamIds.length === 0) {
@@ -180,7 +179,9 @@ export default function Home() {
   const handleSimulateWin = async (teamId: number, teamName: string) => {
     if (!user?.is_admin) return;
     if (!confirm(`ADMIN: Simulate a WIN for ${teamName}?`)) return;
+    
     const { data, error } = await supabase.rpc('simulate_win', { p_team_id: teamId });
+    
     if (!error) {
       toast.success('Payout Distributed!', { 
         description: `${teamName} win processed. Total paid: $${data.payout_total.toFixed(2)}`
@@ -289,17 +290,16 @@ export default function Home() {
                         disabled={!activeLeagues.includes(league)}
                         className={`w-full h-12 flex items-center justify-center group-hover:justify-start group-hover:px-6 transition-all relative ${
                             selectedLeague === league 
-                            ? 'text-white bg-white/5' // Slight BG highlight
+                            ? 'text-white bg-white/5' 
                             : activeLeagues.includes(league)
                                 ? 'text-gray-500 hover:text-white hover:bg-white/5'
                                 : 'text-gray-700 cursor-not-allowed'
                         }`}
                     >
                         {selectedLeague === league && (
-    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#562171] shadow-[0_0_10px_#562171] rounded-r-full"></div>
-)}
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#562171] shadow-[0_0_10px_#562171] rounded-r-full"></div>
+                        )}
                         <div className="flex items-center gap-3">
-                            {/* NHL LOGO (No filter needed for dark mode) */}
                             {league === 'NHL' && (
                                 <img 
                                     src="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg" 
@@ -307,7 +307,6 @@ export default function Home() {
                                     className="h-6 w-6 object-contain flex-shrink-0" 
                                 />
                             )}
-                            {/* NFL LOGO */}
                             {league === 'NFL' && (
                                 <img 
                                     src="https://upload.wikimedia.org/wikipedia/en/a/a2/National_Football_League_logo.svg" 
@@ -316,7 +315,6 @@ export default function Home() {
                                 />
                             )}
                             
-                            {/* TEXT */}
                             <span className="opacity-0 w-0 group-hover:w-auto group-hover:opacity-100 overflow-hidden whitespace-nowrap transition-all duration-300">
                                 {league}
                             </span>
@@ -378,33 +376,34 @@ export default function Home() {
             ) : activeTab === 'PROFILE' ? (
                 // VIEW 2: PROFILE
                 <Profile 
-					key={user?.id}
+                    key={user?.id}
                     user={user} 
                     onOpenWallet={() => setIsWalletOpen(true)}
                     onReload={reloadData}
                 />
             ) : activeTab === 'MARKETS' ? (
                 // VIEW 3: MARKETS
-                loading ? 
-				// --- SKELETON GRID ---
-                <div className="space-y-6">
-                    {/* Fake Stats Bar */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                        {[...Array(5)].map((_, i) => (
-                            <div key={i} className="h-20 bg-black/20 border border-white/5 rounded-xl animate-pulse"></div>
-                        ))}
+                loading ? (
+                    // --- SKELETON LOADING STATE ---
+                    <div className="space-y-6">
+                        {/* Fake Stats Bar */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                            {[...Array(5)].map((_, i) => (
+                                <div key={i} className="h-20 bg-black/20 border border-white/5 rounded-xl animate-pulse"></div>
+                            ))}
+                        </div>
+                        {/* Fake Ticker */}
+                        <div className="h-10 bg-black/20 border-y border-white/5 mb-6 animate-pulse"></div>
+                        
+                        {/* Fake Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {[...Array(9)].map((_, i) => (
+                                <SkeletonCard key={i} />
+                            ))}
+                        </div>
                     </div>
-                    {/* Fake Ticker */}
-                    <div className="h-10 bg-black/20 border-y border-white/5 mb-6 animate-pulse"></div>
-                    
-                    {/* Fake Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {[...Array(9)].map((_, i) => (
-                            <SkeletonCard key={i} />
-                        ))}
-                    </div>
-                </div>
-            ) : (
+                ) : (
+                    // --- REAL DATA ---
                     <div className="space-y-6">
                         <MarketStats 
                             marketCap={marketStats.marketCap}
@@ -413,11 +412,12 @@ export default function Home() {
                             avgYield={marketStats.avgYield}
                             totalBank={marketStats.totalBank}
                         />
-						{/* --- NEW TICKER ADDED HERE --- */}
-    <MarketTicker 
-        teams={teams} 
-        league={selectedLeague} 
-    />
+                        {/* TICKER */}
+                        <MarketTicker 
+                            teams={teams} 
+                            league={selectedLeague} 
+                        />
+                        
                         {sortedOwned.length > 0 && (
                             <div>
                                 <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -483,8 +483,7 @@ export default function Home() {
             onSuccess={reloadData}
         />
       )}
-     {/* TUTORIAL MODAL */}
-      {/* FIX: Wrap in conditional {isTutorialOpen && ...} to force reset on close */}
+
       {isTutorialOpen && (
         <TutorialModal 
             isOpen={isTutorialOpen} 
