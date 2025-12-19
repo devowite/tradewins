@@ -1,6 +1,7 @@
 'use client';
 
 import { HelpCircle } from 'lucide-react';
+import CountUp from 'react-countup';
 
 interface MarketStatsProps {
   marketCap: number;
@@ -13,7 +14,8 @@ interface MarketStatsProps {
 export default function MarketStats({ marketCap, volume24hShares, volume24hDollars, avgYield, totalBank }: MarketStatsProps) {
   
   // Helper to render a clean stat item
-  const StatItem = ({ label, value, subtext, color, isPrimary, tooltip }: any) => (
+  // UPDATED: Now accepts 'rawValue' (number) and formatting props for CountUp
+  const StatItem = ({ label, rawValue, prefix = '', decimals = 0, subtext, color, isPrimary, tooltip }: any) => (
     <div className={`flex flex-col justify-center px-4 relative group cursor-help ${isPrimary ? 'items-start min-w-[180px]' : 'items-start min-w-[140px]'}`}>
       
       {/* Label */}
@@ -22,9 +24,17 @@ export default function MarketStats({ marketCap, volume24hShares, volume24hDolla
         <HelpCircle size={10} className="text-gray-700 group-hover:text-gray-500 transition" />
       </div>
 
-      {/* Value (Primary is HUGE, Secondary is Normal) */}
+      {/* Value (Wrapped in CountUp) */}
       <div className={`font-mono font-bold leading-none ${isPrimary ? `text-3xl ${color || 'text-white'}` : `text-xl text-gray-300`}`}>
-        {value} <span className="text-sm text-gray-600 font-sans font-normal ml-1">{subtext}</span>
+        <CountUp 
+            end={rawValue} 
+            prefix={prefix} 
+            separator="," 
+            decimals={decimals} 
+            duration={1.5} 
+            preserveValue={true}
+        />
+        <span className="text-sm text-gray-600 font-sans font-normal ml-1">{subtext}</span>
       </div>
 
       {/* Tooltip Popup */}
@@ -40,7 +50,8 @@ export default function MarketStats({ marketCap, volume24hShares, volume24hDolla
       {/* 1. Market Cap (Primary) */}
       <StatItem 
         label="Market Cap" 
-        value={`$${marketCap.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+        rawValue={marketCap}
+        prefix="$"
         color="text-white"
         isPrimary={true} 
         tooltip="The total dollar value of all shares currently owned by players."
@@ -52,7 +63,8 @@ export default function MarketStats({ marketCap, volume24hShares, volume24hDolla
       {/* 2. Total Dividend Pot (Primary) */}
       <StatItem 
         label="Total Dividend Pot" 
-        value={`$${totalBank.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+        rawValue={totalBank}
+        prefix="$"
         color="text-yellow-400"
         isPrimary={true} 
         tooltip="Total sum of all outstanding dividends, waiting to be paid out to winners."
@@ -63,7 +75,7 @@ export default function MarketStats({ marketCap, volume24hShares, volume24hDolla
       {/* 3. Volume Shares */}
       <StatItem 
         label="24h Volume" 
-        value={volume24hShares.toLocaleString()}
+        rawValue={volume24hShares}
         subtext="shares"
         tooltip="Total number of shares bought or sold in the last 24 hours."
       />
@@ -73,7 +85,8 @@ export default function MarketStats({ marketCap, volume24hShares, volume24hDolla
       {/* 4. Volume Dollars */}
       <StatItem 
         label="24h Value" 
-        value={`$${volume24hDollars.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+        rawValue={volume24hDollars}
+        prefix="$"
         tooltip="Total USD value of all trades executed in the last 24 hours."
       />
 
@@ -82,7 +95,9 @@ export default function MarketStats({ marketCap, volume24hShares, volume24hDolla
       {/* 5. Avg Yield */}
       <StatItem 
         label="Avg. Yield" 
-        value={`$${avgYield.toFixed(2)}`}
+        rawValue={avgYield}
+        prefix="$"
+        decimals={2}
         color="text-green-400"
         tooltip="The weighted average payout per share across the entire market."
       />
